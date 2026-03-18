@@ -170,20 +170,44 @@ class GensparkAgent:
         return {
             "html_path": output.html_path,
             "markdown_path": output.markdown_path,
+            "markdown_content": output.markdown_content,
+            "html_content": output.html_content,
             "query": output.query,
             "confidence_score": output.confidence_score,
             "generated_at": output.generated_at,
+            "title": output.title,
         }
 
     def _dict_to_output(self, data: dict) -> Optional[SparkpageOutput]:
-        """캐시된 dict → SparkpageOutput"""
+        """캐시된 dict → SparkpageOutput (파일 재읽기 폴백)"""
         try:
+            html_content = data.get("html_content", "")
+            markdown_content = data.get("markdown_content", "")
+
+            # 파일 재읽기 폴백
+            if not html_content and data.get("html_path"):
+                try:
+                    with open(data["html_path"], "r", encoding="utf-8") as f:
+                        html_content = f.read()
+                except Exception:
+                    pass
+
+            if not markdown_content and data.get("markdown_path"):
+                try:
+                    with open(data["markdown_path"], "r", encoding="utf-8") as f:
+                        markdown_content = f.read()
+                except Exception:
+                    pass
+
             return SparkpageOutput(
                 html_path=data.get("html_path", ""),
                 markdown_path=data.get("markdown_path", ""),
+                markdown_content=markdown_content,
+                html_content=html_content,
                 query=data.get("query", ""),
                 confidence_score=data.get("confidence_score", 0.0),
                 generated_at=data.get("generated_at", ""),
+                title=data.get("title", ""),
             )
         except Exception:
             return None

@@ -87,6 +87,22 @@ class ContentFetcher:
 
         return contents
 
+    def fetch_urls(self, urls: List[str]) -> List[FetchedContent]:
+        """URL 문자열 리스트 페칭 (researcher_agent 용)"""
+        contents = []
+
+        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            futures = {executor.submit(self.fetch, url): url for url in urls}
+
+            for future in as_completed(futures):
+                try:
+                    content = future.result()
+                    contents.append(content)
+                except Exception:
+                    pass
+
+        return contents
+
     def fetch_for_queries(
         self, search_results: Dict[str, List]
     ) -> List[FetchedContent]:

@@ -93,9 +93,14 @@ class SparkpageGenerator:
         return "\n".join(lines)
 
     def _generate_html(self, result: SynthesisResult, query: str, markdown: str) -> str:
-        """HTML 생성"""
-        # 마크다운 → HTML 간단 변환
-        html_body = self._markdown_to_html(markdown)
+        """HTML 생성 (위젯 렌더러 사용)"""
+        # 섹션별 위젯 렌더링
+        html_widgets = []
+        for section in result.sections:
+            rendered_widget = self.widget_renderer.render(section.content, section.section_type)
+            html_widgets.append(rendered_widget.html)
+
+        html_body = "\n".join(html_widgets) if html_widgets else self._markdown_to_html(markdown)
 
         meta = {
             "title": query,
