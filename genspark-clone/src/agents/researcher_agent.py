@@ -72,7 +72,7 @@ class BaseResearcherAgent(ABC):
             # 검색 실행
             search_results = []
             for query in queries:
-                results = self.searcher.search(query, max_results=5)
+                results = self.searcher.search(query)
                 search_results.extend(results)
                 time.sleep(1)  # 봇 차단 회피
 

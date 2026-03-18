@@ -87,6 +87,8 @@ def test_content_fetcher_fetch_urls():
 
 def test_widget_renderer_used_in_html_generation():
     """Bug 3: WidgetRenderer가 HTML 생성에 사용됨 확인"""
+    from src.widget_renderer import RenderedWidget
+
     generator = SparkpageGenerator()
 
     # Mock SynthesisResult
@@ -115,17 +117,21 @@ def test_widget_renderer_used_in_html_generation():
     # _generate_html() 호출
     with patch.object(generator.widget_renderer, 'render') as mock_render:
         # render()는 각 섹션마다 호출되어야 함
-        mock_render.return_value = "<div class='widget'>rendered</div>"
+        mock_render.return_value = RenderedWidget(
+            html="<div class='widget'>rendered</div>",
+            widget_type="text",
+            css_class="widget-text"
+        )
 
         html = generator._generate_html(mock_result, "test query", "")
 
         # 섹션 개수만큼 widget_renderer.render() 호출 확인
         assert mock_render.call_count == 2, f"Expected 2 render() calls, got {mock_render.call_count}"
 
-        # render() 호출 시 content와 title 전달 확인
+        # render() 호출 시 content와 section_type 전달 확인
         first_call_args = mock_render.call_args_list[0]
         assert first_call_args[0][0] == "| col1 | col2 |\n|------|------|\n| a    | b    |"
-        assert first_call_args[0][1] == "Section 1"
+        assert first_call_args[0][1] == "detail"
 
     print("✅ WidgetRenderer.render() used in HTML generation OK")
 

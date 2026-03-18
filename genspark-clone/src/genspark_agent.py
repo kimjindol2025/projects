@@ -19,6 +19,8 @@ from .agents.researcher_agent import (
     ReviewAgent,
 )
 from .consensus_engine import ConsensusEngine
+from .routing_agent import RoutingAgent
+from .crosscheck_agent import CrossCheckAgent
 
 
 @dataclass
@@ -37,6 +39,11 @@ class AgentConfig:
     use_cache: bool = True
     use_multi_agent: bool = False
     agent_types: List[str] = None
+    # v3.0 옵션
+    openai_api_key: str = ""
+    use_routing: bool = True
+    use_crosscheck: bool = True
+    max_parallel_workers: int = 2
 
 
 class GensparkAgent:
@@ -55,6 +62,14 @@ class GensparkAgent:
         # v2.0 추가
         self.cache = CacheManager(cache_dir=f"{config.output_dir}/.cache", default_ttl=config.cache_ttl)
         self.consensus_engine = ConsensusEngine()
+        # v3.0 추가
+        self.routing_agent = RoutingAgent(
+            api_key=config.anthropic_api_key,
+            searcher=self.searcher,
+            fetcher=self.fetcher,
+            max_workers=config.max_parallel_workers,
+        ) if config.use_routing else None
+        self.crosscheck_agent = CrossCheckAgent(openai_api_key=config.openai_api_key) if config.use_crosscheck else None
         if config.agent_types is None:
             config.agent_types = ["general", "tech", "news", "review"]
 
@@ -84,18 +99,50 @@ class GensparkAgent:
                 contents = self._run_multi_agent(query_spec)
                 self._log("AGENTS", f"멀티 에이전트 완료")
             else:
-                # Step 2: 웹 검색
-                search_results = self._step2_search(query_spec)
-                total_results = sum(len(v) for v in search_results.values())
-                self._log("SEARCH", f"검색 완료: {total_results}개 결과")
+                # Step 1.5: RoutingAgent (v3.0) - DAG 기반 의존성 분석 + 병렬/순차 실행
+                if self.config.use_routing and self.routing_agent:
+                    routing_result = self.routing_agent.run(query_spec)
+                    contents = routing_result.all_contents
+                    self._log(
+                        "ROUTING",
+                        f"라우팅 완료: {len(contents)}개 콘텐츠, "
+                        f"병렬 그룹 {len(routing_result.plan.parallel_groups)}개, "
+                        f"순차 체인 {len(routing_result.plan.sequential_chains)}개",
+                    )
+                else:
+                    # Step 2: 웹 검색
+                    search_results = self._step2_search(query_spec)
+                    total_results = sum(len(v) for v in search_results.values())
+                    self._log("SEARCH", f"검색 완료: {total_results}개 결과")
 
-                # Step 3: 콘텐츠 페칭
-                contents = self._step3_fetch(search_results)
-                valid_count = sum(1 for c in contents if c.fetch_status == "ok")
-                self._log("FETCH", f"페칭 완료: {valid_count}/{len(contents)} 유효")
+                    # Step 3: 콘텐츠 페칭
+                    contents = self._step3_fetch(search_results)
+                    valid_count = sum(1 for c in contents if c.fetch_status == "ok")
+                    self._log("FETCH", f"페칭 완료: {valid_count}/{len(contents)} 유효")
+
+            # Step 3.5: CrossCheckAgent (v3.0) - 벡터 기반 충돌 검증
+            crosscheck_confidence = None
+            if self.config.use_crosscheck and self.crosscheck_agent:
+                crosscheck_report = self.crosscheck_agent.run(contents, base_confidence=0.85)
+                crosscheck_confidence = crosscheck_report.adjusted_confidence
+                if crosscheck_report.warnings:
+                    self._log("CROSSCHECK", f"충돌 감지: {len(crosscheck_report.warnings)}개 경고")
+                    for warning in crosscheck_report.warnings[:3]:
+                        self._log("  ", warning)
+                else:
+                    self._log("CROSSCHECK", "충돌 없음")
 
             # Step 4: AI 합산
             synthesis_result = self._step4_synthesize(query_spec, contents)
+
+            # CrossCheck 신뢰도 통합 (v3.0)
+            if crosscheck_confidence is not None:
+                from .crosscheck_agent import CrossCheckValidator
+                final_confidence = CrossCheckValidator.integrate_with_consensus(
+                    synthesis_result.confidence_score,
+                    type('Report', (), {'adjusted_confidence': crosscheck_confidence})()
+                )
+                synthesis_result.confidence_score = final_confidence
             self._log(
                 "SYNTHESIZE",
                 f"합산 완료: {len(synthesis_result.sections)}개 섹션, "
