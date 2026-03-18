@@ -1,0 +1,45 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Go build cache
+.cache/
+*.o
+*.a
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+*.cover
+*.out
+coverage.txt
+
+# Temporary files
+*.tmp
+*.bak
+/tmp/
+
+# Build artifacts
+dist/
+build/
+
+# Dependencies
+vendor/
+
+# Project specific
+*.jl.o
+*.jl.s
