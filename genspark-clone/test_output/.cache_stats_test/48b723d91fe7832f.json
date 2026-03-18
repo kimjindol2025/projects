@@ -1,0 +1,11 @@
+{
+  "cache_key": "48b723d91fe7832f",
+  "query": "multi_1",
+  "result": {
+    "test": "data"
+  },
+  "created_at": 1773828458.0800729,
+  "ttl_seconds": 86400,
+  "hit_count": 0,
+  "agent_type": "multi"
+}

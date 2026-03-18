@@ -1,0 +1,14 @@
+{
+  "cache_key": "681c3069849ff168",
+  "query": "테스트 쿼리",
+  "result": {
+    "html_path": "/output/test.html",
+    "markdown_path": "/output/test.md",
+    "query": "테스트 쿼리",
+    "confidence_score": 0.92
+  },
+  "created_at": 1773828454.0528471,
+  "ttl_seconds": 86400,
+  "hit_count": 1,
+  "agent_type": "single"
+}

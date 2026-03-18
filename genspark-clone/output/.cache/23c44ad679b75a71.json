@@ -1,0 +1,11 @@
+{
+  "cache_key": "23c44ad679b75a71",
+  "query": "히트 카운트 테스트",
+  "result": {
+    "test": "data"
+  },
+  "created_at": 1773828437.0098898,
+  "ttl_seconds": 86400,
+  "hit_count": 3,
+  "agent_type": "single"
+}

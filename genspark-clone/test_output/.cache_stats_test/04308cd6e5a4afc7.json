@@ -1,0 +1,11 @@
+{
+  "cache_key": "04308cd6e5a4afc7",
+  "query": "single_0",
+  "result": {
+    "test": "data"
+  },
+  "created_at": 1773828458.0766487,
+  "ttl_seconds": 86400,
+  "hit_count": 0,
+  "agent_type": "single"
+}

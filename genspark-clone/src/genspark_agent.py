@@ -4,13 +4,21 @@ Genspark 에이전트: 전체 파이프라인 오케스트레이션
 """
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, List
 
 from .query_analyzer import QueryAnalyzer
 from .web_searcher import DuckDuckGoSearcher
 from .content_fetcher import ContentFetcher
 from .claude_synthesizer import ClaudeSynthesizer
 from .sparkpage_generator import SparkpageGenerator, SparkpageOutput
+from .cache_manager import CacheManager
+from .agents.researcher_agent import (
+    GeneralAgent,
+    TechAgent,
+    NewsAgent,
+    ReviewAgent,
+)
+from .consensus_engine import ConsensusEngine
 
 
 @dataclass
@@ -24,6 +32,11 @@ class AgentConfig:
     output_dir: str = "output"
     search_delay: float = 1.0
     verbose: bool = True
+    # v2.0 옵션
+    cache_ttl: int = 86400  # 24시간
+    use_cache: bool = True
+    use_multi_agent: bool = False
+    agent_types: List[str] = None
 
 
 class GensparkAgent:
@@ -39,11 +52,24 @@ class GensparkAgent:
             config.anthropic_api_key, config.synthesize_model
         )
         self.generator = SparkpageGenerator(config.output_dir)
+        # v2.0 추가
+        self.cache = CacheManager(cache_dir=f"{config.output_dir}/.cache", default_ttl=config.cache_ttl)
+        self.consensus_engine = ConsensusEngine()
+        if config.agent_types is None:
+            config.agent_types = ["general", "tech", "news", "review"]
 
     def run(self, user_query: str) -> Optional[SparkpageOutput]:
         """사용자 질문 → Sparkpage 생성"""
         try:
             self._log("INIT", f"시작: '{user_query}'")
+
+            # 캐시 확인 (v2.0)
+            if self.config.use_cache:
+                cache_key = self.cache.get_key(user_query)
+                cached_result = self.cache.get(cache_key)
+                if cached_result:
+                    self._log("CACHE", f"캐시 히트! (키: {cache_key[:8]}...)")
+                    return self._dict_to_output(cached_result)
 
             # Step 1: 질문 분석
             query_spec = self._step1_analyze(user_query)
@@ -53,15 +79,20 @@ class GensparkAgent:
                 f"예상 섹션: {', '.join(query_spec.expected_sections[:2])}",
             )
 
-            # Step 2: 웹 검색
-            search_results = self._step2_search(query_spec)
-            total_results = sum(len(v) for v in search_results.values())
-            self._log("SEARCH", f"검색 완료: {total_results}개 결과")
+            # Multi-Agent 모드 선택 (v2.0)
+            if self.config.use_multi_agent:
+                contents = self._run_multi_agent(query_spec)
+                self._log("AGENTS", f"멀티 에이전트 완료")
+            else:
+                # Step 2: 웹 검색
+                search_results = self._step2_search(query_spec)
+                total_results = sum(len(v) for v in search_results.values())
+                self._log("SEARCH", f"검색 완료: {total_results}개 결과")
 
-            # Step 3: 콘텐츠 페칭
-            contents = self._step3_fetch(search_results)
-            valid_count = sum(1 for c in contents if c.fetch_status == "ok")
-            self._log("FETCH", f"페칭 완료: {valid_count}/{len(contents)} 유효")
+                # Step 3: 콘텐츠 페칭
+                contents = self._step3_fetch(search_results)
+                valid_count = sum(1 for c in contents if c.fetch_status == "ok")
+                self._log("FETCH", f"페칭 완료: {valid_count}/{len(contents)} 유효")
 
             # Step 4: AI 합산
             synthesis_result = self._step4_synthesize(query_spec, contents)
@@ -74,6 +105,17 @@ class GensparkAgent:
             # Step 5: Sparkpage 생성
             output = self._step5_generate(synthesis_result, user_query)
             self._log("GENERATE", f"생성 완료: {output.html_path}")
+
+            # 캐시 저장 (v2.0)
+            if self.config.use_cache:
+                cache_key = self.cache.get_key(user_query)
+                agent_type = "multi" if self.config.use_multi_agent else "single"
+                self.cache.set(
+                    cache_key,
+                    user_query,
+                    self._output_to_dict(output),
+                    agent_type=agent_type
+                )
 
             return output
         except Exception as e:
@@ -99,6 +141,52 @@ class GensparkAgent:
     def _step5_generate(self, result, query):
         """Step 5: SparkpageGenerator 실행"""
         return self.generator.generate(result, query)
+
+    def _run_multi_agent(self, query_spec):
+        """Multi-Agent 모드: 4개 에이전트 병렬 실행 + 합의 (v2.0)"""
+        agent_classes = {
+            "general": GeneralAgent,
+            "tech": TechAgent,
+            "news": NewsAgent,
+            "review": ReviewAgent,
+        }
+
+        agent_results = []
+        for agent_type in self.config.agent_types:
+            if agent_type in agent_classes:
+                agent_class = agent_classes[agent_type]
+                agent = agent_class(self.searcher, self.fetcher)
+                result = agent.research(query_spec)
+                agent_results.append(result)
+
+        # ConsensusEngine으로 결과 병합
+        consensus = self.consensus_engine.run(query_spec.original_query, agent_results)
+
+        # 병합된 콘텐츠 반환
+        return consensus.merged_contents
+
+    def _output_to_dict(self, output: SparkpageOutput) -> dict:
+        """SparkpageOutput → 캐시 가능한 dict"""
+        return {
+            "html_path": output.html_path,
+            "markdown_path": output.markdown_path,
+            "query": output.query,
+            "confidence_score": output.confidence_score,
+            "generated_at": output.generated_at,
+        }
+
+    def _dict_to_output(self, data: dict) -> Optional[SparkpageOutput]:
+        """캐시된 dict → SparkpageOutput"""
+        try:
+            return SparkpageOutput(
+                html_path=data.get("html_path", ""),
+                markdown_path=data.get("markdown_path", ""),
+                query=data.get("query", ""),
+                confidence_score=data.get("confidence_score", 0.0),
+                generated_at=data.get("generated_at", ""),
+            )
+        except Exception:
+            return None
 
     def _log(self, step: str, message: str):
         """로그 출력"""

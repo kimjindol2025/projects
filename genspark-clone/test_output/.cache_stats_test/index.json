@@ -1,0 +1,17 @@
+{
+  "04308cd6e5a4afc7": {
+    "query": "single_0",
+    "created_at": 1773828458.0766487,
+    "agent_type": "single"
+  },
+  "f9827ceb20db9904": {
+    "query": "single_1",
+    "created_at": 1773828458.0784981,
+    "agent_type": "single"
+  },
+  "48b723d91fe7832f": {
+    "query": "multi_1",
+    "created_at": 1773828458.0800729,
+    "agent_type": "multi"
+  }
+}

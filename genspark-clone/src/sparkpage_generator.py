@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict
 
 from .claude_synthesizer import SynthesisResult
+from .widget_renderer import WidgetRenderer, WIDGET_CSS
 
 
 @dataclass
@@ -16,10 +17,12 @@ class SparkpageOutput:
     """생성된 Sparkpage"""
     markdown_path: str
     html_path: str
-    markdown_content: str
-    html_content: str
-    title: str
-    generated_at: str
+    markdown_content: str = ""
+    html_content: str = ""
+    title: str = ""
+    generated_at: str = ""
+    query: str = ""
+    confidence_score: float = 0.0
 
 
 class SparkpageGenerator:
@@ -28,6 +31,7 @@ class SparkpageGenerator:
     def __init__(self, output_dir: str = "output"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
+        self.widget_renderer = WidgetRenderer()
 
     def generate(self, result: SynthesisResult, query: str) -> SparkpageOutput:
         """SynthesisResult → HTML + MD 파일 생성"""
@@ -54,6 +58,8 @@ class SparkpageGenerator:
             html_content=html_content,
             title=query,
             generated_at=timestamp,
+            query=query,
+            confidence_score=result.confidence_score,
         )
 
     def _generate_markdown(self, result: SynthesisResult, query: str) -> str:
@@ -155,7 +161,7 @@ class SparkpageGenerator:
         return "\n".join(html_lines)
 
     def _generate_html_template(self, body: str, title: str, meta: Dict) -> str:
-        """HTML 템플릿 생성"""
+        """HTML 템플릿 생성 (위젯 CSS 포함)"""
         return f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -181,6 +187,9 @@ class SparkpageGenerator:
         aside h3 {{ margin-top: 0; }}
         aside a {{ color: #007bff; text-decoration: none; word-break: break-all; }}
         aside a:hover {{ text-decoration: underline; }}
+
+        /* v2.0 Widget Styles */
+        {WIDGET_CSS}
     </style>
 </head>
 <body>
@@ -198,7 +207,7 @@ class SparkpageGenerator:
         </main>
         <aside>
             <h3>ℹ️ 이 Sparkpage는 AI가 자동 생성했습니다</h3>
-            <p>Genspark Clone으로 생성된 종합 정보 페이지입니다. 정보의 정확성을 위해 원본 소스를 확인하세요.</p>
+            <p>Genspark Clone v2.0으로 생성된 종합 정보 페이지입니다. 다양한 관점의 정보 수집과 위젯 기반 시각화를 포함합니다.</p>
         </aside>
     </div>
 </body>
