@@ -268,7 +268,12 @@ function skip_whitespace(lexer: Lexer): Lexer =
 
 function skip_line_comment(lexer: Lexer): Lexer =
   if lexer.ch == "#" && peek_char(lexer) != "=" then
-    if lexer.ch == "\n" || lexer.ch == "" then
+    if lexer.ch == "\n" then
+      let updated = read_char(lexer)
+      updated.line = updated.line + 1
+      updated.column = 1
+      updated
+    else if lexer.ch == "" then
       lexer
     else
       skip_line_comment(read_char(lexer))

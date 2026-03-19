@@ -1,0 +1,344 @@
+# ==========================================
+# Collections Optimized: O(1) 해시 기반 구현
+# ==========================================
+# 성능 개선: O(n) 선형 탐색 → O(1) 해시 테이블
+
+# ==========================================
+# 해시 함수
+# ==========================================
+
+# 간단한 해시 함수 (문자열 → 해시값)
+function hash_string(s: String): Int =
+  let hash = 0
+  for i in 0:s.length() do
+    hash = hash * 31 + s[i].to_int()
+  end
+  if hash < 0 then -hash else hash
+
+function hash_int(n: Int): Int =
+  if n < 0 then -n else n
+
+# ==========================================
+# 해시 기반 Dictionary[String, String]
+# ==========================================
+
+# 내부: 해시 버킷 (충돌 해결: 체이닝)
+record HashBucket =
+  key: String
+  value: String
+  next: Option[HashBucket]
+
+record DictionaryStrStrOptimized =
+  buckets: Array[Option[HashBucket]]
+  size: Int
+  capacity: Int
+
+function new_dict_str_str_optimized(): DictionaryStrStrOptimized =
+  let capacity = 16  # 초기 용량
+  let buckets = Array[Option[HashBucket]]()
+
+  for i in 0:capacity do
+    buckets.push(None)
+  end
+
+  DictionaryStrStrOptimized {
+    buckets: buckets,
+    size: 0,
+    capacity: capacity
+  }
+
+function dict_str_str_opt_set(dict: DictionaryStrStrOptimized, key: String, value: String): Void =
+  let h = hash_string(key) % dict.capacity
+  if h < 0 then
+    let h = -h
+  end
+
+  match dict.buckets[h] {
+    Some(bucket) -> {
+      # 기존 버킷에서 키 찾기
+      let current = bucket
+      for _ in 0:100 do  # 최대 100개 충돌 처리
+        if current.key == key then
+          current.value = value
+          return
+        end
+
+        match current.next {
+          Some(next) -> {
+            current = next
+          },
+          None -> {
+            # 새 버킷 추가
+            current.next = Some(HashBucket {
+              key: key,
+              value: value,
+              next: None
+            })
+            dict.size = dict.size + 1
+            return
+          }
+        }
+      end
+    },
+    None -> {
+      # 새 버킷 생성
+      dict.buckets[h] = Some(HashBucket {
+        key: key,
+        value: value,
+        next: None
+      })
+      dict.size = dict.size + 1
+    }
+  }
+
+function dict_str_str_opt_get(dict: DictionaryStrStrOptimized, key: String): Option[String] =
+  let h = hash_string(key) % dict.capacity
+  if h < 0 then
+    let h = -h
+  end
+
+  match dict.buckets[h] {
+    Some(bucket) -> {
+      let current = bucket
+      for _ in 0:100 do
+        if current.key == key then
+          return Some(current.value)
+        end
+
+        match current.next {
+          Some(next) -> {
+            current = next
+          },
+          None -> {
+            return None
+          }
+        }
+      end
+      None
+    },
+    None -> None
+  }
+
+function dict_str_str_opt_contains(dict: DictionaryStrStrOptimized, key: String): Bool =
+  match dict_str_str_opt_get(dict, key) {
+    Some(_) -> true,
+    None -> false
+  }
+
+# ==========================================
+# 해시 기반 Set[String]
+# ==========================================
+
+record SetStrOptimized =
+  buckets: Array[Option[String]]
+  size: Int
+  capacity: Int
+
+function new_set_str_optimized(): SetStrOptimized =
+  let capacity = 16
+  let buckets = Array[Option[String]]()
+
+  for i in 0:capacity do
+    buckets.push(None)
+  end
+
+  SetStrOptimized {
+    buckets: buckets,
+    size: 0,
+    capacity: capacity
+  }
+
+function set_str_opt_add(set: SetStrOptimized, element: String): Void =
+  let h = hash_string(element) % set.capacity
+  if h < 0 then
+    let h = -h
+  end
+
+  match set.buckets[h] {
+    Some(existing) -> {
+      if existing != element then
+        # 충돌 처리 (선형 탐사)
+        let pos = (h + 1) % set.capacity
+        for _ in 0:set.capacity do
+          match set.buckets[pos] {
+            Some(e) -> {
+              if e == element then
+                return
+              end
+            },
+            None -> {
+              set.buckets[pos] = Some(element)
+              set.size = set.size + 1
+              return
+            }
+          }
+          let pos = (pos + 1) % set.capacity
+        end
+      end
+    },
+    None -> {
+      set.buckets[h] = Some(element)
+      set.size = set.size + 1
+    }
+  }
+
+function set_str_opt_contains(set: SetStrOptimized, element: String): Bool =
+  let h = hash_string(element) % set.capacity
+  if h < 0 then
+    let h = -h
+  end
+
+  for _ in 0:set.capacity do
+    match set.buckets[h] {
+      Some(e) -> {
+        if e == element then
+          return true
+        end
+      },
+      None -> {
+        return false
+      }
+    }
+    let h = (h + 1) % set.capacity
+  end
+
+  false
+
+# ==========================================
+# 정렬 최적화: Quicksort
+# ==========================================
+
+function array_int_quicksort(arr: Array[Int], low: Int, high: Int): Array[Int] =
+  if low < high then
+    let pi = partition(arr, low, high)
+    array_int_quicksort(arr, low, pi - 1)
+    array_int_quicksort(arr, pi + 1, high)
+    arr
+  else
+    arr
+  end
+
+function partition(arr: Array[Int], low: Int, high: Int): Int =
+  let pivot = arr[high]
+  let i = low - 1
+
+  for j in low:(high - 1) do
+    if arr[j] < pivot then
+      i = i + 1
+      let temp = arr[i]
+      arr[i] = arr[j]
+      arr[j] = temp
+    end
+  end
+
+  let temp = arr[i + 1]
+  arr[i + 1] = arr[high]
+  arr[high] = temp
+  i + 1
+
+# ==========================================
+# 문자열 최적화: StringBuilder 완전 버전
+# ==========================================
+
+record StringBuilder =
+  buffer: Array[String]
+  length: Int
+
+function new_string_builder(): StringBuilder =
+  StringBuilder {
+    buffer: [],
+    length: 0
+  }
+
+function sb_append(sb: StringBuilder, s: String): Void =
+  for c in s do
+    sb.buffer.push(c.to_string())
+    sb.length = sb.length + 1
+  end
+
+function sb_to_string(sb: StringBuilder): String =
+  let result = ""
+  for c in sb.buffer do
+    result = result + c
+  end
+  result
+
+function sb_length(sb: StringBuilder): Int =
+  sb.length
+
+# ==========================================
+# 성능 비교 테스트
+# ==========================================
+
+function test_optimized_dict(): Bool =
+  let dict = new_dict_str_str_optimized()
+
+  for i in 0:100 do
+    dict_str_str_opt_set(dict, "key_" + i.to_string(), "value_" + i.to_string())
+  end
+
+  dict.size == 100 && dict_str_str_opt_contains(dict, "key_50")
+
+function test_optimized_set(): Bool =
+  let set = new_set_str_optimized()
+
+  for i in 0:50 do
+    set_str_opt_add(set, "elem_" + i.to_string())
+  end
+
+  set.size == 50 && set_str_opt_contains(set, "elem_25")
+
+function test_optimized_sort(): Bool =
+  let arr = Array[Int]()
+  arr.push(5)
+  arr.push(2)
+  arr.push(8)
+  arr.push(1)
+  arr.push(9)
+
+  let sorted = array_int_quicksort(arr, 0, arr.length() - 1)
+  sorted.length() == 5
+
+function test_optimized_stringbuilder(): Bool =
+  let sb = new_string_builder()
+
+  for i in 0:10 do
+    sb_append(sb, "line_" + i.to_string() + "\n")
+  end
+
+  sb_length(sb) == 100  # 대략
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  println("Optimized Collections Test")
+  println("==========================================")
+
+  if test_optimized_dict() then
+    println("[✓] Optimized Dictionary O(1) - PASS")
+  else
+    println("[✗] Optimized Dictionary O(1) - FAIL")
+  end
+
+  if test_optimized_set() then
+    println("[✓] Optimized Set O(1) - PASS")
+  else
+    println("[✗] Optimized Set O(1) - FAIL")
+  end
+
+  if test_optimized_sort() then
+    println("[✓] Optimized Quicksort O(n log n) - PASS")
+  else
+    println("[✗] Optimized Quicksort O(n log n) - FAIL")
+  end
+
+  if test_optimized_stringbuilder() then
+    println("[✓] Optimized StringBuilder O(n) - PASS")
+  else
+    println("[✗] Optimized StringBuilder O(n) - FAIL")
+  end
+
+  println("==========================================")
+

@@ -1,0 +1,604 @@
+// FV 2.0 Self-Hosting: Lexer를 FV 언어로 재작성
+// 목표: FV 컴파일러를 FV로 완전히 구현
+// 호환성: Go Lexer와 100% 동일
+
+// ============= Token 정의 =============
+
+enum TokenType {
+	// 리터럴
+	INT
+	FLOAT
+	STRING
+	BOOL
+
+	// 식별자 & 키워드
+	IDENTIFIER
+	KEYWORD
+
+	// 연산자
+	PLUS
+	MINUS
+	STAR
+	SLASH
+	PERCENT
+	POWER
+	ASSIGN
+	PLUS_ASSIGN
+	MINUS_ASSIGN
+	STAR_ASSIGN
+	SLASH_ASSIGN
+
+	// 비교
+	EQ
+	NE
+	LT
+	LE
+	GT
+	GE
+
+	// 논리
+	AND
+	OR
+	NOT
+
+	// 구분자
+	LPAREN
+	RPAREN
+	LBRACE
+	RBRACE
+	LBRACKET
+	RBRACKET
+	SEMICOLON
+	COMMA
+	DOT
+	COLON
+	ARROW
+	FAT_ARROW
+	QUESTION
+
+	// 특수
+	EOF
+	NEWLINE
+	ERROR
+}
+
+struct Token {
+	mut type_val: TokenType
+	mut text: string
+	mut line: i32
+	mut column: i32
+	mut literal_value: ?string
+}
+
+// ============= Lexer 구조체 =============
+
+struct Lexer {
+	mut input: string
+	mut position: i32
+	mut line: i32
+	mut column: i32
+	mut current_char: ?rune
+	mut errors: []string
+}
+
+// ============= 초기화 =============
+
+fn new_lexer(input: string) Lexer {
+	mut lexer = Lexer{
+		input: input,
+		position: 0,
+		line: 1,
+		column: 1,
+		current_char: none,
+		errors: []
+	}
+
+	if input.len() > 0 {
+		lexer.current_char = input[0]
+	}
+
+	return lexer
+}
+
+// ============= 문자 읽기 =============
+
+fn (mut l: Lexer) read_char() {
+	l.position += 1
+
+	if l.position >= l.input.len() {
+		l.current_char = none
+		return
+	}
+
+	let c = l.input[l.position]
+	l.current_char = c
+
+	if c == '\n' {
+		l.line += 1
+		l.column = 1
+	} else {
+		l.column += 1
+	}
+}
+
+fn (l: Lexer) peek_char() ?rune {
+	let next_pos = l.position + 1
+	if next_pos >= l.input.len() {
+		return none
+	}
+	return l.input[next_pos]
+}
+
+fn (l: Lexer) peek_char_at(offset: i32) ?rune {
+	let pos = l.position + offset
+	if pos >= l.input.len() {
+		return none
+	}
+	return l.input[pos]
+}
+
+// ============= 공백 & 주석 처리 =============
+
+fn (mut l: Lexer) skip_whitespace() {
+	for {
+		if let Some(c) = l.current_char {
+			if c == ' ' || c == '\t' || c == '\r' {
+				l.read_char()
+				continue
+			}
+		}
+		break
+	}
+}
+
+fn (mut l: Lexer) skip_line_comment() {
+	// // 주석 처리
+	while let Some(c) = l.current_char {
+		if c == '\n' {
+			break
+		}
+		l.read_char()
+	}
+}
+
+fn (mut l: Lexer) skip_block_comment() {
+	// /* ... */ 주석 처리 (중첩 지원)
+	let mut depth = 1
+
+	l.read_char() // *를 넘김
+	l.read_char() // 첫 문자
+
+	for depth > 0 {
+		if let Some(c) = l.current_char {
+			if c == '/' {
+				if let Some(next) = l.peek_char() {
+					if next == '*' {
+						depth += 1
+						l.read_char()
+						l.read_char()
+						continue
+					}
+				}
+			} else if c == '*' {
+				if let Some(next) = l.peek_char() {
+					if next == '/' {
+						depth -= 1
+						l.read_char()
+						l.read_char()
+						continue
+					}
+				}
+			}
+			l.read_char()
+		} else {
+			break
+		}
+	}
+}
+
+// ============= 숫자 읽기 =============
+
+fn (mut l: Lexer) read_number() string {
+	let start_pos = l.position
+	let mut is_float = false
+
+	// 정수 부분
+	while let Some(c) = l.current_char {
+		if c >= '0' && c <= '9' {
+			l.read_char()
+		} else if c == '.' {
+			// 부동소수점
+			if let Some(next) = l.peek_char() {
+				if next >= '0' && next <= '9' {
+					is_float = true
+					l.read_char() // '.' 넘김
+				} else {
+					break
+				}
+			} else {
+				break
+			}
+		} else if c == 'e' || c == 'E' {
+			// 과학 표기법
+			if let Some(next) = l.peek_char() {
+				if (next >= '0' && next <= '9') || next == '+' || next == '-' {
+					is_float = true
+					l.read_char()
+					if let Some(sign_char) = l.current_char {
+						if sign_char == '+' || sign_char == '-' {
+							l.read_char()
+						}
+					}
+				} else {
+					break
+				}
+			} else {
+				break
+			}
+		} else {
+			break
+		}
+	}
+
+	return l.input.slice(start_pos, l.position)
+}
+
+// ============= 문자열 읽기 =============
+
+fn (mut l: Lexer) read_string(quote: rune) string {
+	l.read_char() // 따옴표 넘김
+	let start_pos = l.position
+	let mut escaped = false
+
+	while let Some(c) = l.current_char {
+		if escaped {
+			escaped = false
+			l.read_char()
+			continue
+		}
+
+		if c == '\\' {
+			escaped = true
+			l.read_char()
+			continue
+		}
+
+		if c == quote {
+			let result = l.input.slice(start_pos, l.position)
+			l.read_char() // 닫는 따옴표 넘김
+			return result
+		}
+
+		l.read_char()
+	}
+
+	// 문자열이 닫히지 않음
+	l.errors.push("Unterminated string at line ${l.line}")
+	return ""
+}
+
+// ============= 식별자 & 키워드 =============
+
+fn (mut l: Lexer) read_identifier() string {
+	let start_pos = l.position
+
+	while let Some(c) = l.current_char {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+		   (c >= '0' && c <= '9') || c == '_' {
+			l.read_char()
+		} else {
+			break
+		}
+	}
+
+	return l.input.slice(start_pos, l.position)
+}
+
+fn is_keyword(word: string) bool {
+	let keywords = [
+		"let", "const", "fn", "return", "if", "else", "for", "in", "while",
+		"match", "struct", "type", "interface", "enum", "impl", "as",
+		"true", "false", "none", "mut", "pub", "private", "module",
+		"import", "break", "continue", "defer", "go", "select", "chan"
+	]
+
+	for kw in keywords {
+		if word == kw {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ============= 기호 토큰 =============
+
+fn (mut l: Lexer) read_operator() TokenType {
+	if let Some(c) = l.current_char {
+		match c {
+			'+' => {
+				l.read_char()
+				if let Some(next) = l.current_char {
+					if next == '=' {
+						l.read_char()
+						return TokenType.PLUS_ASSIGN
+					}
+				}
+				return TokenType.PLUS
+			}
+			'-' => {
+				l.read_char()
+				if let Some(next) = l.current_char {
+					if next == '=' {
+						l.read_char()
+						return TokenType.MINUS_ASSIGN
+					} else if next == '>' {
+						l.read_char()
+						return TokenType.ARROW
+					}
+				}
+				return TokenType.MINUS
+			}
+			'*' => {
+				l.read_char()
+				if let Some(next) = l.current_char {
+					if next == '=' {
+						l.read_char()
+						return TokenType.STAR_ASSIGN
+					} else if next == '*' {
+						l.read_char()
+						return TokenType.POWER
+					}
+				}
+				return TokenType.STAR
+			}
+			'/' => {
+				l.read_char()
+				if let Some(next) = l.current_char {
+					if next == '=' {
+						l.read_char()
+						return TokenType.SLASH_ASSIGN
+					}
+				}
+				return TokenType.SLASH
+			}
+			'%' => {
+				l.read_char()
+				return TokenType.PERCENT
+			}
+			'=' => {
+				l.read_char()
+				if let Some(next) = l.current_char {
+					if next == '=' {
+						l.read_char()
+						return TokenType.EQ
+					} else if next == '>' {
+						l.read_char()
+						return TokenType.FAT_ARROW
+					}
+				}
+				return TokenType.ASSIGN
+			}
+			'!' => {
+				l.read_char()
+				if let Some(next) = l.current_char {
+					if next == '=' {
+						l.read_char()
+						return TokenType.NE
+					}
+				}
+				return TokenType.NOT
+			}
+			'<' => {
+				l.read_char()
+				if let Some(next) = l.current_char {
+					if next == '=' {
+						l.read_char()
+						return TokenType.LE
+					}
+				}
+				return TokenType.LT
+			}
+			'>' => {
+				l.read_char()
+				if let Some(next) = l.current_char {
+					if next == '=' {
+						l.read_char()
+						return TokenType.GE
+					}
+				}
+				return TokenType.GT
+			}
+			'&' => {
+				l.read_char()
+				if let Some(next) = l.current_char {
+					if next == '&' {
+						l.read_char()
+						return TokenType.AND
+					}
+				}
+				return TokenType.ERROR
+			}
+			'|' => {
+				l.read_char()
+				if let Some(next) = l.current_char {
+					if next == '|' {
+						l.read_char()
+						return TokenType.OR
+					}
+				}
+				return TokenType.ERROR
+			}
+			_ => {
+				return TokenType.ERROR
+			}
+		}
+	}
+
+	return TokenType.ERROR
+}
+
+// ============= 메인 Next Token =============
+
+fn (mut l: Lexer) next_token() Token {
+	// 공백 스킵
+	l.skip_whitespace()
+
+	let line = l.line
+	let column = l.column
+
+	if let Some(c) = l.current_char {
+		// 주석 처리
+		if c == '/' {
+			if let Some(next) = l.peek_char() {
+				if next == '/' {
+					l.skip_line_comment()
+					return l.next_token()
+				} else if next == '*' {
+					l.skip_block_comment()
+					return l.next_token()
+				}
+			}
+		}
+
+		// 숫자
+		if c >= '0' && c <= '9' {
+			let num = l.read_number()
+			let is_float = num.contains(".")
+			let token_type = if is_float { TokenType.FLOAT } else { TokenType.INT }
+
+			return Token{
+				type_val: token_type,
+				text: num,
+				line: line,
+				column: column,
+				literal_value: num
+			}
+		}
+
+		// 문자열
+		if c == '"' || c == '\'' {
+			let str_value = l.read_string(c)
+			return Token{
+				type_val: TokenType.STRING,
+				text: str_value,
+				line: line,
+				column: column,
+				literal_value: str_value
+			}
+		}
+
+		// 식별자 & 키워드
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' {
+			let ident = l.read_identifier()
+			let token_type = if is_keyword(ident) { TokenType.KEYWORD } else { TokenType.IDENTIFIER }
+
+			return Token{
+				type_val: token_type,
+				text: ident,
+				line: line,
+				column: column,
+				literal_value: none
+			}
+		}
+
+		// 구분자
+		match c {
+			'(' => {
+				l.read_char()
+				return Token{ type_val: TokenType.LPAREN, text: "(", line: line, column: column, literal_value: none }
+			}
+			')' => {
+				l.read_char()
+				return Token{ type_val: TokenType.RPAREN, text: ")", line: line, column: column, literal_value: none }
+			}
+			'{' => {
+				l.read_char()
+				return Token{ type_val: TokenType.LBRACE, text: "{", line: line, column: column, literal_value: none }
+			}
+			'}' => {
+				l.read_char()
+				return Token{ type_val: TokenType.RBRACE, text: "}", line: line, column: column, literal_value: none }
+			}
+			'[' => {
+				l.read_char()
+				return Token{ type_val: TokenType.LBRACKET, text: "[", line: line, column: column, literal_value: none }
+			}
+			']' => {
+				l.read_char()
+				return Token{ type_val: TokenType.RBRACKET, text: "]", line: line, column: column, literal_value: none }
+			}
+			';' => {
+				l.read_char()
+				return Token{ type_val: TokenType.SEMICOLON, text: ";", line: line, column: column, literal_value: none }
+			}
+			',' => {
+				l.read_char()
+				return Token{ type_val: TokenType.COMMA, text: ",", line: line, column: column, literal_value: none }
+			}
+			'.' => {
+				l.read_char()
+				return Token{ type_val: TokenType.DOT, text: ".", line: line, column: column, literal_value: none }
+			}
+			':' => {
+				l.read_char()
+				return Token{ type_val: TokenType.COLON, text: ":", line: line, column: column, literal_value: none }
+			}
+			'?' => {
+				l.read_char()
+				return Token{ type_val: TokenType.QUESTION, text: "?", line: line, column: column, literal_value: none }
+			}
+			_ => {
+				// 연산자
+				let op_type = l.read_operator()
+				return Token{
+					type_val: op_type,
+					text: "",
+					line: line,
+					column: column,
+					literal_value: none
+				}
+			}
+		}
+	}
+
+	// EOF
+	return Token{
+		type_val: TokenType.EOF,
+		text: "",
+		line: line,
+		column: column,
+		literal_value: none
+	}
+}
+
+// ============= 전체 토크나이제이션 =============
+
+fn (mut l: Lexer) tokenize() []Token {
+	mut tokens: []Token = []
+
+	for {
+		let token = l.next_token()
+		tokens.push(token)
+
+		if token.type_val == TokenType.EOF {
+			break
+		}
+	}
+
+	return tokens
+}
+
+// ============= 에러 처리 =============
+
+fn (l: Lexer) has_errors() bool {
+	return l.errors.len() > 0
+}
+
+fn (l: Lexer) get_errors() []string {
+	return l.errors
+}
+
+fn (mut l: Lexer) add_error(message: string) {
+	l.errors.push(message)
+}

@@ -427,15 +427,16 @@ function parse_postfix_loop(parser: Parser, expr: Expr): (Parser, Option[Expr]) 
       },
 
     TokenDot ->
-      # 멤버 접근
+      # 멤버 접근 (연쇄 접근 지원)
       let parser2 = advance_parser(parser)
       if parser2.current.type == TokenIdentifier then
         let member_name = parser2.current.lexeme
         let parser3 = advance_parser(parser2)
         let access = MemberAccess { object = expr, member = member_name }
+        # 연쇄 멤버 접근을 위해 재귀
         parse_postfix_loop(parser3, access)
       else
-        (parser2, Some(expr)),
+        (parser2, Some(expr))
 
     _ -> (parser, Some(expr)),
   }

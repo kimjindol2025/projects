@@ -1,0 +1,649 @@
+// FV 2.0 Self-Hosting: Parser를 FV 언어로 재작성
+// 목표: FV를 FV로 파싱
+
+// ============= AST 노드 =============
+
+struct Program {
+	mut definitions: []Definition
+	mut main_body: []Statement
+}
+
+struct Definition {
+	mut kind: string
+	mut name: string
+	mut data: ?string
+}
+
+struct Statement {
+	mut kind: string
+	mut content: ?string
+}
+
+struct Expression {
+	mut kind: string
+	mut value: ?string
+}
+
+// ============= Parser 구조체 =============
+
+struct Parser {
+	mut tokens: []Token
+	mut pos: i32
+	mut errors: []string
+}
+
+// ============= 초기화 =============
+
+fn new_parser(tokens: []Token) Parser {
+	return Parser{
+		tokens: tokens,
+		pos: 0,
+		errors: []
+	}
+}
+
+// ============= 기본 헬퍼 =============
+
+fn (p: Parser) current() Token {
+	if p.pos >= p.tokens.len() {
+		return Token{
+			type_val: TokenType.EOF,
+			text: "",
+			line: 0,
+			column: 0,
+			literal_value: none
+		}
+	}
+	return p.tokens[p.pos]
+}
+
+fn (p: Parser) peek() Token {
+	if p.pos + 1 >= p.tokens.len() {
+		return Token{
+			type_val: TokenType.EOF,
+			text: "",
+			line: 0,
+			column: 0,
+			literal_value: none
+		}
+	}
+	return p.tokens[p.pos + 1]
+}
+
+fn (p: Parser) check(token_type: TokenType) bool {
+	return p.current().type_val == token_type
+}
+
+fn (mut p: Parser) advance() {
+	p.pos += 1
+}
+
+fn (mut p: Parser) match_token(token_type: TokenType) bool {
+	if p.check(token_type) {
+		p.advance()
+		return true
+	}
+	return false
+}
+
+fn (p: Parser) is_at_end() bool {
+	return p.check(TokenType.EOF)
+}
+
+// ============= 메인 Parse =============
+
+fn (mut p: Parser) parse() ?Program {
+	mut definitions: []Definition = []
+	mut main_body: []Statement = []
+
+	while !p.is_at_end() {
+		// 함수 정의
+		if p.current().text == "fn" {
+			if let Some(def) = p.parse_function() {
+				definitions.push(def)
+			}
+		}
+		// 구조체 정의
+		else if p.current().text == "struct" {
+			if let Some(def) = p.parse_struct() {
+				definitions.push(def)
+			}
+		}
+		// 타입 정의
+		else if p.current().text == "type" {
+			if let Some(def) = p.parse_type_def() {
+				definitions.push(def)
+			}
+		}
+		// 일반 statement
+		else {
+			if let Some(stmt) = p.parse_statement() {
+				main_body.push(stmt)
+			}
+		}
+	}
+
+	return Program{
+		definitions: definitions,
+		main_body: main_body
+	}
+}
+
+// ============= 함수 정의 파싱 =============
+
+fn (mut p: Parser) parse_function() ?Definition {
+	if !p.match_token(TokenType.KEYWORD) || p.tokens[p.pos - 1].text != "fn" {
+		return none
+	}
+
+	// 함수 이름
+	let name = p.current().text
+	if !p.match_token(TokenType.IDENTIFIER) {
+		p.errors.push("Expected function name")
+		return none
+	}
+
+	// (
+	if !p.match_token(TokenType.LPAREN) {
+		p.errors.push("Expected '(' after function name")
+		return none
+	}
+
+	// 파라미터 파싱
+	while !p.check(TokenType.RPAREN) && !p.is_at_end() {
+		// param: Type
+		if p.match_token(TokenType.IDENTIFIER) {
+			// 파라미터 이름
+		}
+
+		if p.match_token(TokenType.COLON) {
+			// 타입
+			if p.match_token(TokenType.IDENTIFIER) {
+				// 타입 이름
+			}
+		}
+
+		if p.check(TokenType.COMMA) {
+			p.advance()
+		} else {
+			break
+		}
+	}
+
+	// )
+	if !p.match_token(TokenType.RPAREN) {
+		p.errors.push("Expected ')' after parameters")
+		return none
+	}
+
+	// 반환 타입 (선택)
+	if p.match_token(TokenType.ARROW) {
+		if p.match_token(TokenType.IDENTIFIER) {
+			// 반환 타입
+		}
+	}
+
+	// {
+	if !p.match_token(TokenType.LBRACE) {
+		p.errors.push("Expected '{' before function body")
+		return none
+	}
+
+	// 함수 본문
+	mut body_stmts: []Statement = []
+	while !p.check(TokenType.RBRACE) && !p.is_at_end() {
+		if let Some(stmt) = p.parse_statement() {
+			body_stmts.push(stmt)
+		}
+	}
+
+	// }
+	if !p.match_token(TokenType.RBRACE) {
+		p.errors.push("Expected '}' after function body")
+		return none
+	}
+
+	return Definition{
+		kind: "function",
+		name: name,
+		data: "fn"
+	}
+}
+
+// ============= 구조체 정의 파싱 =============
+
+fn (mut p: Parser) parse_struct() ?Definition {
+	if !p.match_token(TokenType.KEYWORD) || p.tokens[p.pos - 1].text != "struct" {
+		return none
+	}
+
+	// 구조체 이름
+	let name = p.current().text
+	if !p.match_token(TokenType.IDENTIFIER) {
+		p.errors.push("Expected struct name")
+		return none
+	}
+
+	// {
+	if !p.match_token(TokenType.LBRACE) {
+		p.errors.push("Expected '{'")
+		return none
+	}
+
+	// 필드 파싱
+	while !p.check(TokenType.RBRACE) && !p.is_at_end() {
+		// field: Type
+		if p.match_token(TokenType.IDENTIFIER) {
+			// 필드 이름
+		}
+
+		if p.match_token(TokenType.COLON) {
+			if p.match_token(TokenType.IDENTIFIER) {
+				// 필드 타입
+			}
+		}
+	}
+
+	// }
+	if !p.match_token(TokenType.RBRACE) {
+		p.errors.push("Expected '}'")
+		return none
+	}
+
+	return Definition{
+		kind: "struct",
+		name: name,
+		data: "struct"
+	}
+}
+
+// ============= 타입 정의 파싱 =============
+
+fn (mut p: Parser) parse_type_def() ?Definition {
+	if !p.match_token(TokenType.KEYWORD) || p.tokens[p.pos - 1].text != "type" {
+		return none
+	}
+
+	let name = p.current().text
+	if !p.match_token(TokenType.IDENTIFIER) {
+		return none
+	}
+
+	return Definition{
+		kind: "type",
+		name: name,
+		data: "type"
+	}
+}
+
+// ============= Statement 파싱 =============
+
+fn (mut p: Parser) parse_statement() ?Statement {
+	// let 문
+	if p.current().text == "let" {
+		return p.parse_let_statement()
+	}
+	// const 문
+	else if p.current().text == "const" {
+		return p.parse_const_statement()
+	}
+	// if 문
+	else if p.current().text == "if" {
+		return p.parse_if_statement()
+	}
+	// for 루프
+	else if p.current().text == "for" {
+		return p.parse_for_statement()
+	}
+	// return 문
+	else if p.current().text == "return" {
+		return p.parse_return_statement()
+	}
+	// 표현식 문
+	else {
+		return p.parse_expression_statement()
+	}
+}
+
+// ============= let 문 =============
+
+fn (mut p: Parser) parse_let_statement() ?Statement {
+	if !p.match_token(TokenType.KEYWORD) || p.tokens[p.pos - 1].text != "let" {
+		return none
+	}
+
+	// 변수 이름
+	if !p.match_token(TokenType.IDENTIFIER) {
+		p.errors.push("Expected variable name")
+		return none
+	}
+
+	// : Type (선택)
+	if p.match_token(TokenType.COLON) {
+		if !p.match_token(TokenType.IDENTIFIER) {
+			p.errors.push("Expected type")
+			return none
+		}
+	}
+
+	// = value
+	if !p.match_token(TokenType.ASSIGN) {
+		p.errors.push("Expected '='")
+		return none
+	}
+
+	// 값 파싱
+	if let Some(_) = p.parse_expression() {
+		// 표현식 파싱됨
+	}
+
+	return Statement{
+		kind: "let",
+		content: "let"
+	}
+}
+
+// ============= const 문 =============
+
+fn (mut p: Parser) parse_const_statement() ?Statement {
+	if !p.match_token(TokenType.KEYWORD) || p.tokens[p.pos - 1].text != "const" {
+		return none
+	}
+
+	if !p.match_token(TokenType.IDENTIFIER) {
+		p.errors.push("Expected constant name")
+		return none
+	}
+
+	if !p.match_token(TokenType.ASSIGN) {
+		p.errors.push("Expected '='")
+		return none
+	}
+
+	if let Some(_) = p.parse_expression() {
+		// 표현식 파싱됨
+	}
+
+	return Statement{
+		kind: "const",
+		content: "const"
+	}
+}
+
+// ============= if 문 =============
+
+fn (mut p: Parser) parse_if_statement() ?Statement {
+	if !p.match_token(TokenType.KEYWORD) || p.tokens[p.pos - 1].text != "if" {
+		return none
+	}
+
+	// 조건 파싱
+	if let Some(_) = p.parse_expression() {
+		// 조건 파싱됨
+	}
+
+	// {
+	if !p.match_token(TokenType.LBRACE) {
+		p.errors.push("Expected '{'")
+		return none
+	}
+
+	// 본문
+	while !p.check(TokenType.RBRACE) && !p.is_at_end() {
+		if let Some(_) = p.parse_statement() {
+			// 문 파싱됨
+		}
+	}
+
+	// }
+	if !p.match_token(TokenType.RBRACE) {
+		p.errors.push("Expected '}'")
+		return none
+	}
+
+	// else (선택)
+	if p.current().text == "else" {
+		p.advance()
+
+		if p.current().text == "if" {
+			// else if
+			if let Some(_) = p.parse_if_statement() {
+				// if 파싱됨
+			}
+		} else if p.match_token(TokenType.LBRACE) {
+			// else {
+			while !p.check(TokenType.RBRACE) && !p.is_at_end() {
+				if let Some(_) = p.parse_statement() {
+					// 문 파싱됨
+				}
+			}
+
+			if !p.match_token(TokenType.RBRACE) {
+				p.errors.push("Expected '}'")
+				return none
+			}
+		}
+	}
+
+	return Statement{
+		kind: "if",
+		content: "if"
+	}
+}
+
+// ============= for 루프 =============
+
+fn (mut p: Parser) parse_for_statement() ?Statement {
+	if !p.match_token(TokenType.KEYWORD) || p.tokens[p.pos - 1].text != "for" {
+		return none
+	}
+
+	// 변수명
+	if !p.match_token(TokenType.IDENTIFIER) {
+		p.errors.push("Expected loop variable")
+		return none
+	}
+
+	// in
+	if !p.match_token(TokenType.KEYWORD) || p.tokens[p.pos - 1].text != "in" {
+		p.errors.push("Expected 'in'")
+		return none
+	}
+
+	// 반복자 파싱
+	if let Some(_) = p.parse_expression() {
+		// 표현식 파싱됨
+	}
+
+	// {
+	if !p.match_token(TokenType.LBRACE) {
+		p.errors.push("Expected '{'")
+		return none
+	}
+
+	// 본문
+	while !p.check(TokenType.RBRACE) && !p.is_at_end() {
+		if let Some(_) = p.parse_statement() {
+			// 문 파싱됨
+		}
+	}
+
+	// }
+	if !p.match_token(TokenType.RBRACE) {
+		p.errors.push("Expected '}'")
+		return none
+	}
+
+	return Statement{
+		kind: "for",
+		content: "for"
+	}
+}
+
+// ============= return 문 =============
+
+fn (mut p: Parser) parse_return_statement() ?Statement {
+	if !p.match_token(TokenType.KEYWORD) || p.tokens[p.pos - 1].text != "return" {
+		return none
+	}
+
+	// 반환값 (선택)
+	if !p.check(TokenType.RBRACE) && !p.is_at_end() {
+		if let Some(_) = p.parse_expression() {
+			// 표현식 파싱됨
+		}
+	}
+
+	return Statement{
+		kind: "return",
+		content: "return"
+	}
+}
+
+// ============= 표현식 문 =============
+
+fn (mut p: Parser) parse_expression_statement() ?Statement {
+	if let Some(_) = p.parse_expression() {
+		return Statement{
+			kind: "expression",
+			content: "expr"
+		}
+	}
+	return none
+}
+
+// ============= 표현식 파싱 =============
+
+fn (mut p: Parser) parse_expression() ?Expression {
+	return p.parse_comparison()
+}
+
+fn (mut p: Parser) parse_comparison() ?Expression {
+	mut left = p.parse_additive()
+
+	while p.current().type_val in [TokenType.EQ, TokenType.NE, TokenType.LT, TokenType.LE, TokenType.GT, TokenType.GE] {
+		p.advance()
+		if let Some(_) = p.parse_additive() {
+			// 우측 파싱됨
+		}
+	}
+
+	return left
+}
+
+fn (mut p: Parser) parse_additive() ?Expression {
+	mut left = p.parse_multiplicative()
+
+	while p.current().type_val in [TokenType.PLUS, TokenType.MINUS] {
+		p.advance()
+		if let Some(_) = p.parse_multiplicative() {
+			// 우측 파싱됨
+		}
+	}
+
+	return left
+}
+
+fn (mut p: Parser) parse_multiplicative() ?Expression {
+	mut left = p.parse_unary()
+
+	while p.current().type_val in [TokenType.STAR, TokenType.SLASH, TokenType.PERCENT] {
+		p.advance()
+		if let Some(_) = p.parse_unary() {
+			// 우측 파싱됨
+		}
+	}
+
+	return left
+}
+
+fn (mut p: Parser) parse_unary() ?Expression {
+	if p.current().type_val in [TokenType.MINUS, TokenType.NOT] {
+		p.advance()
+		return p.parse_unary()
+	}
+
+	return p.parse_primary()
+}
+
+fn (mut p: Parser) parse_primary() ?Expression {
+	// 숫자
+	if p.current().type_val == TokenType.INT || p.current().type_val == TokenType.FLOAT {
+		p.advance()
+		return Expression{
+			kind: "literal",
+			value: p.tokens[p.pos - 1].text
+		}
+	}
+
+	// 문자열
+	if p.current().type_val == TokenType.STRING {
+		p.advance()
+		return Expression{
+			kind: "string",
+			value: p.tokens[p.pos - 1].text
+		}
+	}
+
+	// 식별자
+	if p.current().type_val == TokenType.IDENTIFIER {
+		let ident = p.current().text
+		p.advance()
+
+		// 함수 호출 확인
+		if p.match_token(TokenType.LPAREN) {
+			// 인자 파싱
+			while !p.check(TokenType.RPAREN) && !p.is_at_end() {
+				if let Some(_) = p.parse_expression() {
+					// 표현식 파싱됨
+				}
+
+				if p.match_token(TokenType.COMMA) {
+					// continue
+				} else {
+					break
+				}
+			}
+
+			if !p.match_token(TokenType.RPAREN) {
+				p.errors.push("Expected ')'")
+				return none
+			}
+
+			return Expression{
+				kind: "call",
+				value: ident
+			}
+		}
+
+		return Expression{
+			kind: "identifier",
+			value: ident
+		}
+	}
+
+	// (
+	if p.match_token(TokenType.LPAREN) {
+		let expr = p.parse_expression()
+
+		if !p.match_token(TokenType.RPAREN) {
+			p.errors.push("Expected ')'")
+			return none
+		}
+
+		return expr
+	}
+
+	p.errors.push("Unexpected token: ${p.current().text}")
+	return none
+}
+
+// ============= 에러 처리 =============
+
+fn (p: Parser) has_errors() bool {
+	return p.errors.len() > 0
+}
+
+fn (p: Parser) get_errors() []string {
+	return p.errors
+}
