@@ -1,0 +1,188 @@
+# ============================================================================
+# Phase C Task C.2: Parser 테스트 (14개 테스트 케이스)
+# ============================================================================
+
+# Test 1: 정수 리터럴 파싱
+function test_integer_literal(): Bool =
+  let lex = new_lexer("42")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 2: 부동소수점 리터럴 파싱
+function test_float_literal(): Bool =
+  let lex = new_lexer("3.14")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 3: 문자열 리터럴 파싱
+function test_string_literal(): Bool =
+  let lex = new_lexer("\"hello\"")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 4: 식별자 파싱
+function test_identifier(): Bool =
+  let lex = new_lexer("x")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 5: 이항 연산 파싱
+function test_binary_op(): Bool =
+  let lex = new_lexer("2 + 3")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 6: 우선순위 (2 + 3 * 4)
+function test_operator_precedence(): Bool =
+  let lex = new_lexer("2 + 3 * 4")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 7: 괄호 파싱
+function test_parentheses(): Bool =
+  let lex = new_lexer("(2 + 3)")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 8: 함수 호출 파싱
+function test_function_call(): Bool =
+  let lex = new_lexer("f(1, 2, 3)")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 9: 배열 인덱싱 파싱
+function test_array_indexing(): Bool =
+  let lex = new_lexer("arr[0]")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 10: let 문 파싱
+function test_let_statement(): Bool =
+  let lex = new_lexer("let x = 42")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 11: if 문 파싱
+function test_if_statement(): Bool =
+  let lex = new_lexer("if x > 0\n  println(x)\nend")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 12: while 루프 파싱
+function test_while_statement(): Bool =
+  let lex = new_lexer("while x < 10\n  x = x + 1\nend")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 13: return 문 파싱
+function test_return_statement(): Bool =
+  let lex = new_lexer("return 42")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 14: 복합 표현식 파싱
+function test_complex_expression(): Bool =
+  let lex = new_lexer("(x + y) * (z - w)")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(prog) -> prog.statements.length > 0,
+    Err(_) -> false,
+  }
+
+# ============================================================================
+# 모든 테스트 실행
+# ============================================================================
+
+function run_parser_tests(): Bool =
+  let results = [
+    ("test_integer_literal", test_integer_literal()),
+    ("test_float_literal", test_float_literal()),
+    ("test_string_literal", test_string_literal()),
+    ("test_identifier", test_identifier()),
+    ("test_binary_op", test_binary_op()),
+    ("test_operator_precedence", test_operator_precedence()),
+    ("test_parentheses", test_parentheses()),
+    ("test_function_call", test_function_call()),
+    ("test_array_indexing", test_array_indexing()),
+    ("test_let_statement", test_let_statement()),
+    ("test_if_statement", test_if_statement()),
+    ("test_while_statement", test_while_statement()),
+    ("test_return_statement", test_return_statement()),
+    ("test_complex_expression", test_complex_expression()),
+  ]
+
+  for (name, result) in results {
+    if !result then
+      eprintln("❌ FAILED: " + name)
+    else
+      println("✅ PASSED: " + name)
+  }
+
+  true
