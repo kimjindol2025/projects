@@ -267,18 +267,19 @@ function skip_whitespace(lexer: Lexer): Lexer =
     lexer
 
 function skip_line_comment(lexer: Lexer): Lexer =
-  if lexer.ch == "#" && peek_char(lexer) != "=" then
+  # 이미 "#"을 지나고 호출되므로, 개행까지 문자 스킵
+  if lexer.ch == "\n" || lexer.ch == "" then
+    # 개행 만남: 라인 카운터 증가
     if lexer.ch == "\n" then
       let updated = read_char(lexer)
       updated.line = updated.line + 1
       updated.column = 1
       updated
-    else if lexer.ch == "" then
-      lexer
     else
-      skip_line_comment(read_char(lexer))
+      lexer
   else
-    lexer
+    # 아직 주석 내용: 다음 문자로
+    skip_line_comment(read_char(lexer))
 
 function skip_block_comment(lexer: Lexer, depth: Int): (Lexer, Bool) =
   if lexer.ch == "" then
