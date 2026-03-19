@@ -1,0 +1,163 @@
+# ==========================================
+# Phase D Task D.7: VM/Runtime Bootstrap 테스트
+# (14개 테스트 케이스)
+# ==========================================
+
+# Test 1: 값 생성 - nil
+function test_value_nil(): Bool =
+  let v = value_nil()
+  v.type_tag == "nil"
+
+# Test 2: 값 생성 - int
+function test_value_int(): Bool =
+  let v = value_int(42)
+  v.type_tag == "int" && v.int_value == 42
+
+# Test 3: 값 생성 - float
+function test_value_float(): Bool =
+  let v = value_float(3.14)
+  v.type_tag == "float"
+
+# Test 4: 값 생성 - string
+function test_value_string(): Bool =
+  let v = value_string("hello")
+  v.type_tag == "string" && v.string_value == "hello"
+
+# Test 5: 값 생성 - bool
+function test_value_bool(): Bool =
+  let v = value_bool(true)
+  v.type_tag == "bool" && v.bool_value
+
+# Test 6: 값 생성 - array
+function test_value_array(): Bool =
+  let arr = Array[Value]()
+  arr.push(value_int(1))
+  arr.push(value_int(2))
+  let v = value_array(arr)
+  v.type_tag == "array" && v.int_value == 2
+
+# Test 7: 스택 푸시
+function test_stack_push(): Bool =
+  let vm = new_vm([])
+  push(vm, value_int(42))
+  vm.stack.values.length() == 1
+
+# Test 8: 스택 팝
+function test_stack_pop(): Bool =
+  let vm = new_vm([])
+  push(vm, value_int(42))
+  match pop(vm) {
+    Some(v) -> v.type_tag == "int" && v.int_value == 42,
+    None -> false
+  }
+
+# Test 9: 변수 설정 & 조회
+function test_variable_operations(): Bool =
+  let vm = new_vm([])
+  set_variable(vm, "x", value_int(42))
+  match get_variable(vm, "x") {
+    Some(v) -> v.int_value == 42,
+    None -> false
+  }
+
+# Test 10: 덧셈 명령어
+function test_instruction_add(): Bool =
+  let instructions = [
+    Instruction { opcode: OpLoadInt, operands: ["2"], result: None },
+    Instruction { opcode: OpLoadInt, operands: ["3"], result: None },
+    Instruction { opcode: OpAdd, operands: [], result: None },
+    Instruction { opcode: OpReturn, operands: [], result: None }
+  ]
+  let vm = new_vm(instructions)
+  let result = execute_vm(vm)
+  result.type_tag == "int" && result.int_value == 5
+
+# Test 11: 뺄셈 명령어
+function test_instruction_sub(): Bool =
+  let instructions = [
+    Instruction { opcode: OpLoadInt, operands: ["5"], result: None },
+    Instruction { opcode: OpLoadInt, operands: ["3"], result: None },
+    Instruction { opcode: OpSub, operands: [], result: None },
+    Instruction { opcode: OpReturn, operands: [], result: None }
+  ]
+  let vm = new_vm(instructions)
+  let result = execute_vm(vm)
+  result.type_tag == "int" && result.int_value == 2
+
+# Test 12: 곱셈 명령어
+function test_instruction_mul(): Bool =
+  let instructions = [
+    Instruction { opcode: OpLoadInt, operands: ["4"], result: None },
+    Instruction { opcode: OpLoadInt, operands: ["5"], result: None },
+    Instruction { opcode: OpMul, operands: [], result: None },
+    Instruction { opcode: OpReturn, operands: [], result: None }
+  ]
+  let vm = new_vm(instructions)
+  let result = execute_vm(vm)
+  result.type_tag == "int" && result.int_value == 20
+
+# Test 13: 논리 AND
+function test_instruction_and(): Bool =
+  let instructions = [
+    Instruction { opcode: OpLoadBool, operands: ["true"], result: None },
+    Instruction { opcode: OpLoadBool, operands: ["false"], result: None },
+    Instruction { opcode: OpAnd, operands: [], result: None },
+    Instruction { opcode: OpReturn, operands: [], result: None }
+  ]
+  let vm = new_vm(instructions)
+  let result = execute_vm(vm)
+  result.type_tag == "bool" && not result.bool_value
+
+# Test 14: 비교 연산 (EQ)
+function test_instruction_eq(): Bool =
+  let instructions = [
+    Instruction { opcode: OpLoadInt, operands: ["42"], result: None },
+    Instruction { opcode: OpLoadInt, operands: ["42"], result: None },
+    Instruction { opcode: OpEq, operands: [], result: None },
+    Instruction { opcode: OpReturn, operands: [], result: None }
+  ]
+  let vm = new_vm(instructions)
+  let result = execute_vm(vm)
+  result.type_tag == "bool" && result.bool_value
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_value_nil", test_value_nil()),
+    ("test_value_int", test_value_int()),
+    ("test_value_float", test_value_float()),
+    ("test_value_string", test_value_string()),
+    ("test_value_bool", test_value_bool()),
+    ("test_value_array", test_value_array()),
+    ("test_stack_push", test_stack_push()),
+    ("test_stack_pop", test_stack_pop()),
+    ("test_variable_operations", test_variable_operations()),
+    ("test_instruction_add", test_instruction_add()),
+    ("test_instruction_sub", test_instruction_sub()),
+    ("test_instruction_mul", test_instruction_mul()),
+    ("test_instruction_and", test_instruction_and()),
+    ("test_instruction_eq", test_instruction_eq())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("VM/Runtime Bootstrap Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")

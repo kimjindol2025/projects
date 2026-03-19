@@ -1,0 +1,215 @@
+# ==========================================
+# Phase D Task D.1: Lexer Bootstrap 테스트
+# (18개 테스트 케이스)
+# ==========================================
+
+# Test 1: 정수 토크나이제이션
+function test_tokenize_integers(): Bool =
+  let tokens = tokenize("42 100 999")
+  tokens.length() >= 3 &&
+  tokens[0].type == INT &&
+  tokens[0].value == "42" &&
+  tokens[1].type == INT &&
+  tokens[2].type == INT
+
+# Test 2: 부동소수점 토크나이제이션
+function test_tokenize_floats(): Bool =
+  let tokens = tokenize("3.14 2.5 0.001")
+  tokens.length() >= 3 &&
+  tokens[0].type == FLOAT &&
+  tokens[1].type == FLOAT &&
+  tokens[2].type == FLOAT
+
+# Test 3: 문자열 토크나이제이션
+function test_tokenize_strings(): Bool =
+  let tokens = tokenize("\"hello\" \"world\"")
+  tokens.length() >= 2 &&
+  tokens[0].type == STRING &&
+  tokens[1].type == STRING
+
+# Test 4: 키워드 인식 (let, fn, if)
+function test_tokenize_keywords(): Bool =
+  let tokens = tokenize("let fn if else for while")
+  tokens.length() >= 6 &&
+  tokens[0].type == KEYWORD_LET &&
+  tokens[1].type == KEYWORD_FN &&
+  tokens[2].type == KEYWORD_IF &&
+  tokens[3].type == KEYWORD_ELSE &&
+  tokens[4].type == KEYWORD_FOR &&
+  tokens[5].type == KEYWORD_WHILE
+
+# Test 5: 식별자 인식
+function test_tokenize_identifiers(): Bool =
+  let tokens = tokenize("x y variable_name _internal")
+  tokens.length() >= 4 &&
+  tokens[0].type == IDENT &&
+  tokens[1].type == IDENT &&
+  tokens[2].type == IDENT &&
+  tokens[3].type == IDENT
+
+# Test 6: 산술 연산자 (+ - * / % ^)
+function test_tokenize_arithmetic(): Bool =
+  let tokens = tokenize("+ - * / % ^")
+  tokens.length() >= 6 &&
+  tokens[0].type == PLUS &&
+  tokens[1].type == MINUS &&
+  tokens[2].type == MULTIPLY &&
+  tokens[3].type == DIVIDE &&
+  tokens[4].type == MODULO &&
+  tokens[5].type == POWER
+
+# Test 7: 비교 연산자 (== != < <= > >=)
+function test_tokenize_comparison(): Bool =
+  let tokens = tokenize("== != < <= > >=")
+  tokens.length() >= 6 &&
+  tokens[0].type == EQ &&
+  tokens[1].type == NEQ &&
+  tokens[2].type == LT &&
+  tokens[3].type == LE &&
+  tokens[4].type == GT &&
+  tokens[5].type == GE
+
+# Test 8: 논리 연산자 (&& || !)
+function test_tokenize_logical(): Bool =
+  let tokens = tokenize("&& || !")
+  tokens.length() >= 3 &&
+  tokens[0].type == AND &&
+  tokens[1].type == OR &&
+  tokens[2].type == NOT
+
+# Test 9: 구분자 ( ) { } [ ] ; , . :
+function test_tokenize_delimiters(): Bool =
+  let tokens = tokenize("( ) { } [ ] ; , . :")
+  tokens.length() >= 10 &&
+  tokens[0].type == LPAREN &&
+  tokens[1].type == RPAREN &&
+  tokens[2].type == LBRACE &&
+  tokens[3].type == RBRACE &&
+  tokens[4].type == LBRACKET &&
+  tokens[5].type == RBRACKET &&
+  tokens[6].type == SEMICOLON &&
+  tokens[7].type == COMMA &&
+  tokens[8].type == DOT &&
+  tokens[9].type == COLON
+
+# Test 10: 화살표 연산자 (-> =>)
+function test_tokenize_arrows(): Bool =
+  let tokens = tokenize("-> =>")
+  tokens.length() >= 2 &&
+  tokens[0].type == ARROW &&
+  tokens[1].type == FAT_ARROW
+
+# Test 11: 할당 연산자 (= += -= *= /=)
+function test_tokenize_assignment(): Bool =
+  let tokens = tokenize("= += -= *= /=")
+  tokens.length() >= 5 &&
+  tokens[0].type == ASSIGN &&
+  tokens[1].type == PLUS_ASSIGN &&
+  tokens[2].type == MINUS_ASSIGN &&
+  tokens[3].type == MULTIPLY_ASSIGN &&
+  tokens[4].type == DIVIDE_ASSIGN
+
+# Test 12: 함수 정의 파싱
+function test_tokenize_function(): Bool =
+  let tokens = tokenize("fn add(a: Int, b: Int): Int = a + b")
+  tokens.length() >= 10 &&
+  tokens[0].type == KEYWORD_FN &&
+  tokens[1].type == IDENT &&  # 'add'
+  tokens[2].type == LPAREN &&
+  tokens[3].type == IDENT &&  # 'a'
+  tokens[4].type == COLON
+
+# Test 13: 복잡한 표현식
+function test_tokenize_complex_expression(): Bool =
+  let tokens = tokenize("let x = (2 + 3) * (4 - 1)")
+  tokens.length() >= 12 &&
+  tokens[0].type == KEYWORD_LET &&
+  tokens[1].type == IDENT &&
+  tokens[2].type == ASSIGN &&
+  tokens[3].type == LPAREN
+
+# Test 14: 불린 리터럴
+function test_tokenize_booleans(): Bool =
+  let tokens = tokenize("true false")
+  tokens.length() >= 2 &&
+  tokens[0].type == BOOL &&
+  tokens[0].value == "true" &&
+  tokens[1].type == BOOL &&
+  tokens[1].value == "false"
+
+# Test 15: nil 리터럴
+function test_tokenize_nil(): Bool =
+  let tokens = tokenize("nil")
+  tokens.length() >= 1 &&
+  tokens[0].type == NIL
+
+# Test 16: 라인 주석 (//)
+function test_tokenize_line_comment(): Bool =
+  let tokens = tokenize("let x = 42 // this is a comment\nlet y = 10")
+  tokens.length() >= 7 &&
+  tokens[0].type == KEYWORD_LET &&
+  tokens[5].type == NEWLINE &&
+  tokens[6].type == KEYWORD_LET
+
+# Test 17: 블록 주석 (/* */)
+function test_tokenize_block_comment(): Bool =
+  let tokens = tokenize("let x = /* comment */ 42")
+  tokens.length() >= 4 &&
+  tokens[0].type == KEYWORD_LET &&
+  tokens[1].type == IDENT &&
+  tokens[2].type == ASSIGN &&
+  tokens[3].type == INT
+
+# Test 18: match 표현식
+function test_tokenize_match(): Bool =
+  let tokens = tokenize("match x { Some(v) -> v, None -> 0 }")
+  tokens.length() >= 10 &&
+  tokens[0].type == KEYWORD_MATCH &&
+  tokens[1].type == IDENT &&
+  tokens[2].type == LBRACE
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_tokenize_integers", test_tokenize_integers()),
+    ("test_tokenize_floats", test_tokenize_floats()),
+    ("test_tokenize_strings", test_tokenize_strings()),
+    ("test_tokenize_keywords", test_tokenize_keywords()),
+    ("test_tokenize_identifiers", test_tokenize_identifiers()),
+    ("test_tokenize_arithmetic", test_tokenize_arithmetic()),
+    ("test_tokenize_comparison", test_tokenize_comparison()),
+    ("test_tokenize_logical", test_tokenize_logical()),
+    ("test_tokenize_delimiters", test_tokenize_delimiters()),
+    ("test_tokenize_arrows", test_tokenize_arrows()),
+    ("test_tokenize_assignment", test_tokenize_assignment()),
+    ("test_tokenize_function", test_tokenize_function()),
+    ("test_tokenize_complex_expression", test_tokenize_complex_expression()),
+    ("test_tokenize_booleans", test_tokenize_booleans()),
+    ("test_tokenize_nil", test_tokenize_nil()),
+    ("test_tokenize_line_comment", test_tokenize_line_comment()),
+    ("test_tokenize_block_comment", test_tokenize_block_comment()),
+    ("test_tokenize_match", test_tokenize_match())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Lexer Bootstrap Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")

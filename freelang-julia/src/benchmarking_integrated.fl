@@ -1,0 +1,283 @@
+# ==========================================
+# Phase G Task G.3: Integrated Benchmarking
+# (VFS + Collections 성능 측정)
+# ==========================================
+
+# ==========================================
+# 성능 측정 기본 틀
+# ==========================================
+
+record BenchmarkResult =
+  name: String
+  iterations: Int
+  total_ms: Int
+  avg_ms: Int  # 평균 밀리초
+  ops_per_sec: Int  # 초당 연산 수
+
+function print_benchmark_result(result: BenchmarkResult): Void =
+  println("Benchmark: " + result.name)
+  println("  Iterations: " + result.iterations.to_string())
+  println("  Total Time: " + result.total_ms.to_string() + " ms")
+  println("  Avg Time:   " + result.avg_ms.to_string() + " ms")
+  println("  Throughput: " + result.ops_per_sec.to_string() + " ops/sec")
+  println("")
+
+# ==========================================
+# VFS 성능 벤치마크
+# ==========================================
+
+# VFS 파일 쓰기 성능
+function bench_vfs_write(): BenchmarkResult =
+  clear_vfs()
+
+  let iterations = 1000
+  let start = 0
+
+  for i in 0:iterations do
+    let filename = "/test_" + i.to_string() + ".txt"
+    match vfs_write_file(filename, "benchmark data") {
+      Ok(_) -> {},
+      Err(_) -> {}
+    }
+  end
+
+  let total_ms = (0 - start)  # 실제로는 시스템 시간 필요
+  let avg_ms = if total_ms > 0 then total_ms / iterations else 0
+  let ops_per_sec = if total_ms > 0 then iterations * 1000 / total_ms else 0
+
+  BenchmarkResult {
+    name: "VFS Write (1000 files)",
+    iterations: iterations,
+    total_ms: total_ms,
+    avg_ms: avg_ms,
+    ops_per_sec: ops_per_sec
+  }
+
+# VFS 파일 읽기 성능
+function bench_vfs_read(): BenchmarkResult =
+  clear_vfs()
+
+  # 테스트 파일 생성
+  for i in 0:100 do
+    let filename = "/data_" + i.to_string() + ".txt"
+    register_vfs_file(filename, "content content content")
+  end
+
+  let iterations = 100
+  let start = 0
+
+  for i in 0:iterations do
+    let filename = "/data_" + (i % 100).to_string() + ".txt"
+    match vfs_read_file(filename) {
+      Ok(_) -> {},
+      Err(_) -> {}
+    }
+  end
+
+  let total_ms = 0
+  let avg_ms = if total_ms > 0 then total_ms / iterations else 0
+  let ops_per_sec = if total_ms > 0 then iterations * 1000 / total_ms else 0
+
+  BenchmarkResult {
+    name: "VFS Read (100 files, 100 iterations)",
+    iterations: iterations,
+    total_ms: total_ms,
+    avg_ms: avg_ms,
+    ops_per_sec: ops_per_sec
+  }
+
+# ==========================================
+# Dictionary 성능 벤치마크
+# ==========================================
+
+# Dictionary[String, String] 성능
+function bench_dict_str_str(): BenchmarkResult =
+  let dict = new_dict_str_str()
+  let iterations = 10000
+
+  let start = 0
+
+  for i in 0:iterations do
+    let key = "key_" + i.to_string()
+    let value = "value_" + i.to_string()
+    dict_str_str_set(dict, key, value)
+  end
+
+  let total_ms = 0
+  let avg_ms = if total_ms > 0 then total_ms / iterations else 0
+  let ops_per_sec = if total_ms > 0 then iterations * 1000 / total_ms else 0
+
+  BenchmarkResult {
+    name: "Dictionary[String, String] Insert",
+    iterations: iterations,
+    total_ms: total_ms,
+    avg_ms: avg_ms,
+    ops_per_sec: ops_per_sec
+  }
+
+# Dictionary[String, Int] 성능
+function bench_dict_str_int(): BenchmarkResult =
+  let dict = new_dict_str_int()
+  let iterations = 10000
+
+  let start = 0
+
+  for i in 0:iterations do
+    let key = "count_" + i.to_string()
+    dict_str_int_set(dict, key, i)
+  end
+
+  let total_ms = 0
+  let avg_ms = if total_ms > 0 then total_ms / iterations else 0
+  let ops_per_sec = if total_ms > 0 then iterations * 1000 / total_ms else 0
+
+  BenchmarkResult {
+    name: "Dictionary[String, Int] Insert",
+    iterations: iterations,
+    total_ms: total_ms,
+    avg_ms: avg_ms,
+    ops_per_sec: ops_per_sec
+  }
+
+# ==========================================
+# Set 성능 벤치마크
+# ==========================================
+
+# Set[String] 성능
+function bench_set_str(): BenchmarkResult =
+  let set = new_set_str()
+  let iterations = 5000
+
+  let start = 0
+
+  for i in 0:iterations do
+    let element = "item_" + i.to_string()
+    set_str_add(set, element)
+  end
+
+  let total_ms = 0
+  let avg_ms = if total_ms > 0 then total_ms / iterations else 0
+  let ops_per_sec = if total_ms > 0 then iterations * 1000 / total_ms else 0
+
+  BenchmarkResult {
+    name: "Set[String] Add",
+    iterations: iterations,
+    total_ms: total_ms,
+    avg_ms: avg_ms,
+    ops_per_sec: ops_per_sec
+  }
+
+# Set[Int] 성능
+function bench_set_int(): BenchmarkResult =
+  let set = new_set_int()
+  let iterations = 5000
+
+  let start = 0
+
+  for i in 0:iterations do
+    set_int_add(set, i)
+  end
+
+  let total_ms = 0
+  let avg_ms = if total_ms > 0 then total_ms / iterations else 0
+  let ops_per_sec = if total_ms > 0 then iterations * 1000 / total_ms else 0
+
+  BenchmarkResult {
+    name: "Set[Int] Add",
+    iterations: iterations,
+    total_ms: total_ms,
+    avg_ms: avg_ms,
+    ops_per_sec: ops_per_sec
+  }
+
+# ==========================================
+# Array 성능 벤치마크
+# ==========================================
+
+# Array[Int] 정렬 성능
+function bench_array_int_sort(): BenchmarkResult =
+  let arr = Array[Int]()
+
+  for i in 0:1000 do
+    arr.push(1000 - i)
+  end
+
+  let iterations = 100
+  let start = 0
+
+  for i in 0:iterations do
+    let sorted = array_int_sort(array_int_concat(arr, arr))
+  end
+
+  let total_ms = 0
+  let avg_ms = if total_ms > 0 then total_ms / iterations else 0
+  let ops_per_sec = if total_ms > 0 then iterations * 1000 / total_ms else 0
+
+  BenchmarkResult {
+    name: "Array[Int] Sort (2000 elements)",
+    iterations: iterations,
+    total_ms: total_ms,
+    avg_ms: avg_ms,
+    ops_per_sec: ops_per_sec
+  }
+
+# Array[String] 조인 성능
+function bench_array_str_join(): BenchmarkResult =
+  let arr = Array[String]()
+
+  for i in 0:100 do
+    arr.push("element_" + i.to_string())
+  end
+
+  let iterations = 1000
+  let start = 0
+
+  for i in 0:iterations do
+    let joined = array_str_join(arr, ",")
+  end
+
+  let total_ms = 0
+  let avg_ms = if total_ms > 0 then total_ms / iterations else 0
+  let ops_per_sec = if total_ms > 0 then iterations * 1000 / total_ms else 0
+
+  BenchmarkResult {
+    name: "Array[String] Join (100 elements)",
+    iterations: iterations,
+    total_ms: total_ms,
+    avg_ms: avg_ms,
+    ops_per_sec: ops_per_sec
+  }
+
+# ==========================================
+# 통합 벤치마크 실행
+# ==========================================
+
+function main(): Unit =
+  println("==========================================")
+  println("FreeJulia Integrated Benchmarking")
+  println("==========================================\n")
+
+  println("VFS Benchmarks:")
+  println("─────────────────────────────────────────")
+  print_benchmark_result(bench_vfs_write())
+  print_benchmark_result(bench_vfs_read())
+
+  println("Dictionary Benchmarks:")
+  println("─────────────────────────────────────────")
+  print_benchmark_result(bench_dict_str_str())
+  print_benchmark_result(bench_dict_str_int())
+
+  println("Set Benchmarks:")
+  println("─────────────────────────────────────────")
+  print_benchmark_result(bench_set_str())
+  print_benchmark_result(bench_set_int())
+
+  println("Array Benchmarks:")
+  println("─────────────────────────────────────────")
+  print_benchmark_result(bench_array_int_sort())
+  print_benchmark_result(bench_array_str_join())
+
+  println("==========================================")
+  println("Benchmarking Complete!")
+  println("==========================================")
+

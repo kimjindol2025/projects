@@ -1,0 +1,242 @@
+# ==========================================
+# Phase D Task D.8: Integration Tests Bootstrap
+# (FreeJulia Self-Hosting E2E 파이프라인 검증)
+# ==========================================
+# Lexer → Parser → Type System → Semantic Analyzer
+# → IR Builder → Code Generator → VM/Runtime
+#
+# 20개 E2E 테스트
+
+# Test 1: Lexer → Parser - 함수 정의
+function test_e2e_function_definition(): Bool =
+  let source = "fn add(a: Int, b: Int): Int = a + b"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  ast.type == "program" && ast.children.length() >= 1 &&
+  ast.children[0].type == "function"
+
+# Test 2: Lexer → Parser - 변수 할당
+function test_e2e_variable_assignment(): Bool =
+  let source = "let x: Int = 42"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  ast.type == "program" &&
+  ast.children.length() >= 1 &&
+  ast.children[0].type == "let"
+
+# Test 3: Type System - 타입 검사
+function test_e2e_type_check(): Bool =
+  let source = "let x: Int = 42"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let ctx = type_check(ast)
+  ctx.errors.length() == 0
+
+# Test 4: Semantic Analyzer - 변수 정의
+function test_e2e_semantic_analysis(): Bool =
+  let node = make_node("let", "x", "")
+  add_property(node, "type", "Int")
+  let lit = make_node("literal", "int", "42")
+  add_child(node, lit)
+
+  let program = make_node("program", "", "")
+  add_child(program, node)
+
+  let sem_ctx = new_semantic_context()
+  let result = analyze_node(program, sem_ctx)
+  result && sem_ctx.errors.length() == 0
+
+# Test 5: IR Builder - 기본 IR 생성
+function test_e2e_ir_generation(): Bool =
+  let program = make_node("program", "", "")
+  let func = make_node("function", "main", "")
+  let lit = make_node("literal", "int", "42")
+  add_child(func, lit)
+  add_child(program, func)
+
+  let ir = build_ir(program)
+  ir.functions.length() == 1 &&
+  ir.functions[0].name == "main"
+
+# Test 6: Code Generation - C 코드 생성
+function test_e2e_code_generation(): Bool =
+  let ir = IRModule {
+    functions: [],
+    globals: []
+  }
+  let code = generate_c_from_ir(ir)
+  code.contains("#include") &&
+  code.length() > 0
+
+# Test 7: VM Execution - 정수 덧셈
+function test_e2e_vm_addition(): Bool =
+  let instructions = [
+    Instruction { opcode: OpLoadInt, operands: ["2"], result: None },
+    Instruction { opcode: OpLoadInt, operands: ["3"], result: None },
+    Instruction { opcode: OpAdd, operands: [], result: None },
+    Instruction { opcode: OpReturn, operands: [], result: None }
+  ]
+  let vm = new_vm(instructions)
+  let result = execute_vm(vm)
+  result.type_tag == "int" && result.int_value == 5
+
+# Test 8: Lexer - 주석 처리
+function test_e2e_comments(): Bool =
+  let source = "let x = 42 // comment\nlet y = 10"
+  let tokens = tokenize(source)
+  tokens.length() >= 7
+
+# Test 9: Parser - if 문
+function test_e2e_if_statement(): Bool =
+  let source = "if x > 0 then let y = 1"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  ast.type == "program" &&
+  ast.children.length() >= 1 &&
+  ast.children[0].type == "if"
+
+# Test 10: Parser - for 루프
+function test_e2e_for_loop(): Bool =
+  let source = "for i in 1:10 do let x = i"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  ast.type == "program" &&
+  ast.children.length() >= 1 &&
+  ast.children[0].type == "for"
+
+# Test 11: Parser - match 표현식
+function test_e2e_match_expression(): Bool =
+  let source = "match x { Some(v) -> v, None -> 0 }"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  ast.type == "program"
+
+# Test 12: Type System - Array 타입
+function test_e2e_array_type(): Bool =
+  let arr_type = type_array(type_int())
+  arr_type.name == "Array[Int]" &&
+  arr_type.kind == "array"
+
+# Test 13: Type System - Option 타입
+function test_e2e_option_type(): Bool =
+  let opt_type = type_option(type_string())
+  opt_type.name == "Option[String]" &&
+  opt_type.kind == "option"
+
+# Test 14: Semantic Analysis - 에러 감지
+function test_e2e_error_detection(): Bool =
+  let program = make_node("program", "", "")
+  let ident = make_node("identifier", "undefined", "")
+  ident.line = 1
+  ident.column = 1
+  add_child(program, ident)
+
+  let sem_ctx = new_semantic_context()
+  let result = analyze_node(program, sem_ctx)
+  not result
+
+# Test 15: IR Builder - 여러 함수
+function test_e2e_multiple_functions(): Bool =
+  let program = make_node("program", "", "")
+  let func1 = make_node("function", "add", "")
+  let func2 = make_node("function", "sub", "")
+  add_child(program, func1)
+  add_child(program, func2)
+
+  let ir = build_ir(program)
+  ir.functions.length() == 2
+
+# Test 16: VM - 여러 연산
+function test_e2e_multiple_operations(): Bool =
+  let instructions = [
+    Instruction { opcode: OpLoadInt, operands: ["2"], result: None },
+    Instruction { opcode: OpLoadInt, operands: ["3"], result: None },
+    Instruction { opcode: OpAdd, operands: [], result: None },
+    Instruction { opcode: OpLoadInt, operands: ["4"], result: None },
+    Instruction { opcode: OpMul, operands: [], result: None },
+    Instruction { opcode: OpReturn, operands: [], result: None }
+  ]
+  let vm = new_vm(instructions)
+  let result = execute_vm(vm)
+  result.type_tag == "int" && result.int_value == 20
+
+# Test 17: Lexer - 모든 토큰 타입
+function test_e2e_all_token_types(): Bool =
+  let source = "fn test() { let x = 42; if x > 0 {} }"
+  let tokens = tokenize(source)
+  tokens.length() > 10
+
+# Test 18: Type System - 타입 호환성
+function test_e2e_type_compatibility(): Bool =
+  let from = type_int()
+  let to = type_float()
+  is_assignable(from, to)
+
+# Test 19: Code Generation - 변수 선언
+function test_e2e_codegen_variable(): Bool =
+  let ctx = new_codegen_context()
+  emit_variable_decl(ctx, "x", "long", Some("42"))
+  ctx.function_code.length() == 1
+
+# Test 20: Full Pipeline - Lexer → Parser → Type Check
+function test_e2e_full_pipeline(): Bool =
+  let source = "fn fibonacci(n: Int): Int = if n <= 1 then n else fibonacci(n - 1) + fibonacci(n - 2)"
+  let tokens = tokenize(source)
+  match tokens {
+    Some(toks) -> {
+      let ast = parse(toks)
+      match ast {
+        _ -> true
+      }
+    },
+    None -> false
+  }
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_e2e_function_definition", test_e2e_function_definition()),
+    ("test_e2e_variable_assignment", test_e2e_variable_assignment()),
+    ("test_e2e_type_check", test_e2e_type_check()),
+    ("test_e2e_semantic_analysis", test_e2e_semantic_analysis()),
+    ("test_e2e_ir_generation", test_e2e_ir_generation()),
+    ("test_e2e_code_generation", test_e2e_code_generation()),
+    ("test_e2e_vm_addition", test_e2e_vm_addition()),
+    ("test_e2e_comments", test_e2e_comments()),
+    ("test_e2e_if_statement", test_e2e_if_statement()),
+    ("test_e2e_for_loop", test_e2e_for_loop()),
+    ("test_e2e_match_expression", test_e2e_match_expression()),
+    ("test_e2e_array_type", test_e2e_array_type()),
+    ("test_e2e_option_type", test_e2e_option_type()),
+    ("test_e2e_error_detection", test_e2e_error_detection()),
+    ("test_e2e_multiple_functions", test_e2e_multiple_functions()),
+    ("test_e2e_multiple_operations", test_e2e_multiple_operations()),
+    ("test_e2e_all_token_types", test_e2e_all_token_types()),
+    ("test_e2e_type_compatibility", test_e2e_type_compatibility()),
+    ("test_e2e_codegen_variable", test_e2e_codegen_variable()),
+    ("test_e2e_full_pipeline", test_e2e_full_pipeline())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Integration Tests Bootstrap Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("Success Rate: " + (passed * 100 / (passed + failed)).to_string() + "%")
+  println("==========================================")

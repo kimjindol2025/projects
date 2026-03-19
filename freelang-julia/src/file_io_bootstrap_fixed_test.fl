@@ -1,0 +1,183 @@
+# ==========================================
+# Phase F Task F.1: File I/O Library 테스트 (FIXED)
+# (18개 개선된 테스트 케이스)
+# ==========================================
+
+# Test 1: 파일 존재 여부 확인 (경로 유효성)
+function test_file_exists_valid(): Bool =
+  file_exists("test.txt")
+
+# Test 2: 빈 경로 거부
+function test_file_exists_empty_path(): Bool =
+  not file_exists("")
+
+# Test 3: 경로 트래버설 차단
+function test_file_exists_path_traversal(): Bool =
+  not file_exists("../../../etc/passwd")
+
+# Test 4: 파일 정보 조회 (에러 처리)
+function test_get_file_info_error(): Bool =
+  match get_file_info("") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "INVALID_PATH"
+  }
+
+# Test 5: 파일 읽기 (에러 처리)
+function test_read_file_empty_path(): Bool =
+  match read_file("") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "INVALID_PATH"
+  }
+
+# Test 6: 파일 라인 읽기 (O(n) 최적화)
+function test_read_lines_optimized(): Bool =
+  match read_file("test.txt") {
+    Ok(_) -> true,
+    Err(_) -> false
+  }
+
+# Test 7: 파일 쓰기 (에러 처리)
+function test_write_file_valid(): Bool =
+  match write_file("output.txt", "Hello, World!") {
+    Ok(size) -> size == 13,
+    Err(_) -> false
+  }
+
+# Test 8: 파일 쓰기 (빈 경로 거부)
+function test_write_file_empty_path(): Bool =
+  match write_file("", "data") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "INVALID_PATH"
+  }
+
+# Test 9: 파일 추가 쓰기 (불변 함수형)
+function test_append_file_immutable(): Bool =
+  match append_file("output.txt", "\nNew line") {
+    Ok(size) -> size > 0,
+    Err(_) -> false
+  }
+
+# Test 10: 디렉토리명 추출 (유효성 검사)
+function test_dirname_valid(): Bool =
+  match dirname("/home/user/file.txt") {
+    Ok(dir) -> dir == "/home/user",
+    Err(_) -> false
+  }
+
+# Test 11: 디렉토리명 추출 (빈 경로 거부)
+function test_dirname_empty_path(): Bool =
+  match dirname("") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "INVALID_PATH"
+  }
+
+# Test 12: 파일명 추출 (유효성 검사)
+function test_basename_valid(): Bool =
+  match basename("/home/user/file.txt") {
+    Ok(name) -> name == "file.txt",
+    Err(_) -> false
+  }
+
+# Test 13: 경로 결합 (빈 경로 거부)
+function test_join_path_empty(): Bool =
+  match join_path("", "file.txt") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "INVALID_PATH"
+  }
+
+# Test 14: 경로 정규화 (보안: ".." 차단)
+function test_normalize_path_traversal(): Bool =
+  match normalize_path("../../../etc") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "INVALID_PATH"
+  }
+
+# Test 15: 경로 정규화 ("//" 정규화)
+function test_normalize_path_double_slash(): Bool =
+  match normalize_path("/home//user//file.txt") {
+    Ok(normalized) -> not normalized.contains("//"),
+    Err(_) -> false
+  }
+
+# Test 16: 파일 복사 (에러 처리)
+function test_copy_file_error(): Bool =
+  match copy_file("", "dest.txt") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "INVALID_PATH"
+  }
+
+# Test 17: 파일 크기 조회
+function test_get_file_size(): Bool =
+  match get_file_size("test.txt") {
+    Ok(size) -> size >= 0,
+    Err(_) -> false
+  }
+
+# Test 18: 절대 경로 확인
+function test_is_absolute_path(): Bool =
+  is_absolute_path("/home/user/file.txt") &&
+  not is_absolute_path("relative/path.txt")
+
+# ==========================================
+# 종합 테스트 (에러 처리 체크)
+# ==========================================
+
+function test_comprehensive_error_handling(): Bool =
+  # 1. 빈 경로 모두 거부
+  let test1 = match read_file("") { Ok(_) -> false, Err(_) -> true }
+
+  # 2. 경로 트래버설 차단
+  let test2 = match normalize_path("..") { Ok(_) -> false, Err(_) -> true }
+
+  # 3. 결과 타입 사용 (Result[T, E])
+  let test3 = match write_file("test.txt", "data") { Ok(_) -> true, Err(_) -> false }
+
+  test1 && test2 && test3
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_file_exists_valid", test_file_exists_valid()),
+    ("test_file_exists_empty_path", test_file_exists_empty_path()),
+    ("test_file_exists_path_traversal", test_file_exists_path_traversal()),
+    ("test_get_file_info_error", test_get_file_info_error()),
+    ("test_read_file_empty_path", test_read_file_empty_path()),
+    ("test_read_lines_optimized", test_read_lines_optimized()),
+    ("test_write_file_valid", test_write_file_valid()),
+    ("test_write_file_empty_path", test_write_file_empty_path()),
+    ("test_append_file_immutable", test_append_file_immutable()),
+    ("test_dirname_valid", test_dirname_valid()),
+    ("test_dirname_empty_path", test_dirname_empty_path()),
+    ("test_basename_valid", test_basename_valid()),
+    ("test_join_path_empty", test_join_path_empty()),
+    ("test_normalize_path_traversal", test_normalize_path_traversal()),
+    ("test_normalize_path_double_slash", test_normalize_path_double_slash()),
+    ("test_copy_file_error", test_copy_file_error()),
+    ("test_get_file_size", test_get_file_size()),
+    ("test_is_absolute_path", test_is_absolute_path()),
+    ("test_comprehensive_error_handling", test_comprehensive_error_handling())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("File I/O Library Test Result (FIXED):")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("Success Rate: " + (passed * 100 / (passed + failed)).to_string() + "%")
+  println("==========================================")

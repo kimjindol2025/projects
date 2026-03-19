@@ -1,0 +1,413 @@
+# ==========================================
+# Phase D Task D.7: VM/Runtime Bootstrap
+# (FreeJulia VM/Runtime을 FreeJulia로 재작성)
+# ==========================================
+# Self-Hosting Virtual Machine
+#
+# 기능:
+# - 바이트코드 해석 및 실행
+# - 스택 관리
+# - 메모리 할당 및 해제
+# - 함수 호출 스택
+
+# ==========================================
+# 값 타입
+# ==========================================
+
+record Value =
+  type_tag: String  # "nil", "int", "float", "string", "bool", "array", "object"
+  int_value: Int
+  float_value: Float
+  string_value: String
+  bool_value: Bool
+  array_value: Array[Value]
+
+# ==========================================
+# 값 생성 함수
+# ==========================================
+
+function value_nil(): Value =
+  Value {
+    type_tag: "nil",
+    int_value: 0,
+    float_value: 0.0,
+    string_value: "",
+    bool_value: false,
+    array_value: []
+  }
+
+function value_int(n: Int): Value =
+  Value {
+    type_tag: "int",
+    int_value: n,
+    float_value: n.to_float(),
+    string_value: n.to_string(),
+    bool_value: n != 0,
+    array_value: []
+  }
+
+function value_float(f: Float): Value =
+  Value {
+    type_tag: "float",
+    int_value: f.to_int(),
+    float_value: f,
+    string_value: f.to_string(),
+    bool_value: f != 0.0,
+    array_value: []
+  }
+
+function value_string(s: String): Value =
+  Value {
+    type_tag: "string",
+    int_value: 0,
+    float_value: 0.0,
+    string_value: s,
+    bool_value: s.length() > 0,
+    array_value: []
+  }
+
+function value_bool(b: Bool): Value =
+  Value {
+    type_tag: "bool",
+    int_value: if b then 1 else 0,
+    float_value: if b then 1.0 else 0.0,
+    string_value: if b then "true" else "false",
+    bool_value: b,
+    array_value: []
+  }
+
+function value_array(arr: Array[Value]): Value =
+  Value {
+    type_tag: "array",
+    int_value: arr.length(),
+    float_value: 0.0,
+    string_value: "",
+    bool_value: arr.length() > 0,
+    array_value: arr
+  }
+
+# ==========================================
+# 스택 & 메모리
+# ==========================================
+
+record VMStack =
+  values: Array[Value]
+  frame_pointers: Array[Int]
+  current_frame: Int
+
+record VMMemory =
+  variables: Array[(String, Value)]
+  global_vars: Array[(String, Value)]
+
+# ==========================================
+# VM 상태
+# ==========================================
+
+record VM =
+  stack: VMStack
+  memory: VMMemory
+  pc: Int  # Program Counter
+  instructions: Array[Instruction]
+  functions: Array[(String, Int)]  # 함수 이름 -> 명령어 위치
+  call_stack: Array[String]
+
+# ==========================================
+# VM 초기화
+# ==========================================
+
+function new_vm_stack(): VMStack =
+  VMStack {
+    values: [],
+    frame_pointers: [],
+    current_frame: 0
+  }
+
+function new_vm_memory(): VMMemory =
+  VMMemory {
+    variables: [],
+    global_vars: []
+  }
+
+function new_vm(instructions: Array[Instruction]): VM =
+  VM {
+    stack: new_vm_stack(),
+    memory: new_vm_memory(),
+    pc: 0,
+    instructions: instructions,
+    functions: [],
+    call_stack: []
+  }
+
+# ==========================================
+# 스택 연산
+# ==========================================
+
+# 값 푸시
+function push(vm: VM, value: Value): Void =
+  vm.stack.values.push(value)
+
+# 값 팝
+function pop(vm: VM): Option[Value] =
+  if vm.stack.values.length() == 0 then
+    None
+  else
+    Some(vm.stack.values.pop())
+  end
+
+# 스택 top 값 (pop하지 않음)
+function peek(vm: VM): Option[Value] =
+  if vm.stack.values.length() == 0 then
+    None
+  else
+    Some(vm.stack.values[vm.stack.values.length() - 1])
+  end
+
+# ==========================================
+# 메모리 연산
+# ==========================================
+
+# 변수 설정
+function set_variable(vm: VM, name: String, value: Value): Void =
+  for i in 0:vm.memory.variables.length() do
+    if vm.memory.variables[i].1 == name then
+      vm.memory.variables[i] = (name, value)
+      return
+    end
+  end
+  vm.memory.variables.push((name, value))
+
+# 변수 조회
+function get_variable(vm: VM, name: String): Option[Value] =
+  for (var_name, value) in vm.memory.variables do
+    if var_name == name then
+      return Some(value)
+    end
+  end
+  None
+
+# ==========================================
+# 명령어 실행
+# ==========================================
+
+function execute_instruction(vm: VM, instr: Instruction): Bool =
+  match instr.opcode {
+    OpLoadInt -> {
+      let value = value_int(instr.operands[0].to_int())
+      push(vm, value)
+      true
+    },
+    OpLoadFloat -> {
+      let value = value_float(instr.operands[0].to_float())
+      push(vm, value)
+      true
+    },
+    OpLoadString -> {
+      let value = value_string(instr.operands[0])
+      push(vm, value)
+      true
+    },
+    OpLoadBool -> {
+      let b = instr.operands[0] == "true"
+      push(vm, value_bool(b))
+      true
+    },
+    OpLoadNil -> {
+      push(vm, value_nil())
+      true
+    },
+    OpAdd -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          if a.type_tag == "int" && b.type_tag == "int" then
+            push(vm, value_int(a.int_value + b.int_value))
+          else if a.type_tag == "float" || b.type_tag == "float" then
+            let af = a.float_value
+            let bf = b.float_value
+            push(vm, value_float(af + bf))
+          else if a.type_tag == "string" && b.type_tag == "string" then
+            push(vm, value_string(a.string_value + b.string_value))
+          else
+            false
+          end
+          true
+        },
+        _ -> false
+      }
+    },
+    OpSub -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          if a.type_tag == "int" && b.type_tag == "int" then
+            push(vm, value_int(a.int_value - b.int_value))
+          else
+            push(vm, value_float(a.float_value - b.float_value))
+          end
+          true
+        },
+        _ -> false
+      }
+    },
+    OpMul -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          if a.type_tag == "int" && b.type_tag == "int" then
+            push(vm, value_int(a.int_value * b.int_value))
+          else
+            push(vm, value_float(a.float_value * b.float_value))
+          end
+          true
+        },
+        _ -> false
+      }
+    },
+    OpDiv -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          if a.type_tag == "int" && b.type_tag == "int" && b.int_value != 0 then
+            push(vm, value_int(a.int_value / b.int_value))
+          else if b.float_value != 0.0 then
+            push(vm, value_float(a.float_value / b.float_value))
+          else
+            false
+          end
+          true
+        },
+        _ -> false
+      }
+    },
+    OpAnd -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          let result = a.bool_value && b.bool_value
+          push(vm, value_bool(result))
+          true
+        },
+        _ -> false
+      }
+    },
+    OpOr -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          let result = a.bool_value || b.bool_value
+          push(vm, value_bool(result))
+          true
+        },
+        _ -> false
+      }
+    },
+    OpNot -> {
+      match pop(vm) {
+        Some(a) -> {
+          push(vm, value_bool(not a.bool_value))
+          true
+        },
+        _ -> false
+      }
+    },
+    OpEq -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          let result = a.type_tag == b.type_tag &&
+                       a.int_value == b.int_value
+          push(vm, value_bool(result))
+          true
+        },
+        _ -> false
+      }
+    },
+    OpNeq -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          let result = a.type_tag != b.type_tag ||
+                       a.int_value != b.int_value
+          push(vm, value_bool(result))
+          true
+        },
+        _ -> false
+      }
+    },
+    OpLt -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          let result = a.float_value < b.float_value
+          push(vm, value_bool(result))
+          true
+        },
+        _ -> false
+      }
+    },
+    OpLe -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          let result = a.float_value <= b.float_value
+          push(vm, value_bool(result))
+          true
+        },
+        _ -> false
+      }
+    },
+    OpGt -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          let result = a.float_value > b.float_value
+          push(vm, value_bool(result))
+          true
+        },
+        _ -> false
+      }
+    },
+    OpGe -> {
+      match (pop(vm), pop(vm)) {
+        (Some(b), Some(a)) -> {
+          let result = a.float_value >= b.float_value
+          push(vm, value_bool(result))
+          true
+        },
+        _ -> false
+      }
+    },
+    OpReturn -> {
+      # 반환값이 스택에 남음
+      true
+    },
+    OpLoadVar -> {
+      let var_name = instr.operands[0]
+      match get_variable(vm, var_name) {
+        Some(value) -> {
+          push(vm, value)
+          true
+        },
+        None -> false
+      }
+    },
+    OpStoreVar -> {
+      let var_name = instr.operands[0]
+      match pop(vm) {
+        Some(value) -> {
+          set_variable(vm, var_name, value)
+          true
+        },
+        None -> false
+      }
+    },
+    _ -> true
+  }
+
+# ==========================================
+# VM 실행
+# ==========================================
+
+function execute_vm(vm: VM): Value =
+  while vm.pc < vm.instructions.length() do
+    let instr = vm.instructions[vm.pc]
+    if not execute_instruction(vm, instr) then
+      break
+    end
+    vm.pc = vm.pc + 1
+  end
+
+  # 스택의 최상단 값 반환
+  match pop(vm) {
+    Some(value) -> value,
+    None -> value_nil()
+  }

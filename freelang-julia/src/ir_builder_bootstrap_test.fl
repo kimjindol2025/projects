@@ -1,0 +1,136 @@
+# ==========================================
+# Phase D Task D.5: IR Builder Bootstrap 테스트
+# (12개 테스트 케이스)
+# ==========================================
+
+# Test 1: 정수 로드 명령어
+function test_emit_load_int(): Bool =
+  let builder = new_ir_builder()
+  let result = emit_load_int(builder, "42")
+  builder.current_block.instructions.length() == 1 &&
+  builder.current_block.instructions[0].opcode == OpLoadInt
+
+# Test 2: 실수 로드 명령어
+function test_emit_load_float(): Bool =
+  let builder = new_ir_builder()
+  let result = emit_load_float(builder, "3.14")
+  builder.current_block.instructions.length() == 1 &&
+  builder.current_block.instructions[0].opcode == OpLoadFloat
+
+# Test 3: 문자열 로드 명령어
+function test_emit_load_string(): Bool =
+  let builder = new_ir_builder()
+  let result = emit_load_string(builder, "hello")
+  builder.current_block.instructions.length() == 1 &&
+  builder.current_block.instructions[0].opcode == OpLoadString
+
+# Test 4: 이항 연산 - 덧셈
+function test_emit_add(): Bool =
+  let builder = new_ir_builder()
+  let left = emit_load_int(builder, "2")
+  let right = emit_load_int(builder, "3")
+  let result = emit_binary_op(builder, OpAdd, left, right)
+  builder.current_block.instructions.length() == 3
+
+# Test 5: 변수 로드
+function test_emit_load_var(): Bool =
+  let builder = new_ir_builder()
+  let result = emit_load_var(builder, "x")
+  builder.current_block.instructions.length() == 1 &&
+  builder.current_block.instructions[0].opcode == OpLoadVar
+
+# Test 6: 변수 저장
+function test_emit_store_var(): Bool =
+  let builder = new_ir_builder()
+  let value = emit_load_int(builder, "42")
+  emit_store_var(builder, "x", value)
+  builder.current_block.instructions.length() == 2 &&
+  builder.current_block.instructions[1].opcode == OpStoreVar
+
+# Test 7: 함수 호출
+function test_emit_call(): Bool =
+  let builder = new_ir_builder()
+  let arg1 = emit_load_int(builder, "2")
+  let arg2 = emit_load_int(builder, "3")
+  let result = emit_call(builder, "add", [arg1, arg2])
+  builder.current_block.instructions.length() == 3
+
+# Test 8: 반환 명령어
+function test_emit_return(): Bool =
+  let builder = new_ir_builder()
+  let value = emit_load_int(builder, "42")
+  emit_return(builder, Some(value))
+  builder.current_block.instructions.length() == 2
+
+# Test 9: 점프 명령어
+function test_emit_jmp(): Bool =
+  let builder = new_ir_builder()
+  emit_jmp(builder, "target_label")
+  builder.current_block.instructions.length() == 1 &&
+  builder.current_block.instructions[0].opcode == OpJmp
+
+# Test 10: 조건부 점프
+function test_emit_cond_jmp(): Bool =
+  let builder = new_ir_builder()
+  let cond = emit_load_bool(builder, "true")
+  emit_cond_jmp(builder, cond, "true_label", "false_label")
+  builder.current_block.instructions.length() == 2
+
+# Test 11: BasicBlock 생성
+function test_begin_block(): Bool =
+  let builder = new_ir_builder()
+  let initial_count = builder.blocks.length()
+  begin_block(builder, "new_block")
+  builder.blocks.length() == initial_count + 1
+
+# Test 12: IR 모듈 생성
+function test_build_ir_module(): Bool =
+  let program = make_node("program", "", "")
+  let func = make_node("function", "main", "")
+  let lit = make_node("literal", "int", "42")
+  add_child(func, lit)
+  add_child(program, func)
+
+  let ir = build_ir(program)
+  ir.functions.length() == 1 &&
+  ir.functions[0].name == "main"
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_emit_load_int", test_emit_load_int()),
+    ("test_emit_load_float", test_emit_load_float()),
+    ("test_emit_load_string", test_emit_load_string()),
+    ("test_emit_add", test_emit_add()),
+    ("test_emit_load_var", test_emit_load_var()),
+    ("test_emit_store_var", test_emit_store_var()),
+    ("test_emit_call", test_emit_call()),
+    ("test_emit_return", test_emit_return()),
+    ("test_emit_jmp", test_emit_jmp()),
+    ("test_emit_cond_jmp", test_emit_cond_jmp()),
+    ("test_begin_block", test_begin_block()),
+    ("test_build_ir_module", test_build_ir_module())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("IR Builder Bootstrap Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")

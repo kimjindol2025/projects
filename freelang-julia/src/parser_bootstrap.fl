@@ -1,0 +1,599 @@
+# ==========================================
+# Phase D Task D.2: FreeJulia Parser Bootstrap
+# (FreeJulia Parser를 FreeJulia로 재작성)
+# ==========================================
+# Self-Hosting Parser 구현
+#
+# 기능:
+# - 토큰 스트림 → AST (Abstract Syntax Tree)
+# - 표현식 파싱 (이항/단항 연산)
+# - 문장 파싱 (let, if, for, while 등)
+# - 선언 파싱 (함수, 구조체, enum 등)
+# - 에러 복구 & 보고
+
+# ==========================================
+# AST 노드 정의
+# ==========================================
+
+record ASTNode =
+  type: String  # "program", "function", "let", "if", etc.
+  name: String
+  value: String
+  line: Int
+  column: Int
+  children: Array[ASTNode]
+  properties: Array[(String, String)]
+
+# ==========================================
+# Parser 구조체
+# ==========================================
+
+record Parser =
+  tokens: Array[Token]
+  current: Int
+  errors: Array[String]
+
+# ==========================================
+# Parser 헬퍼 함수
+# ==========================================
+
+# Parser 초기화
+function new_parser(tokens: Array[Token]): Parser =
+  Parser {
+    tokens: tokens,
+    current: 0,
+    errors: []
+  }
+
+# 현재 토큰 반환
+function current_token(parser: Parser): Token =
+  if parser.current >= parser.tokens.length() then
+    parser.tokens[parser.tokens.length() - 1]  # EOF
+  else
+    parser.tokens[parser.current]
+  end
+
+# 다음 토큰 반환 (현재 토큰 이동)
+function next_token(parser: Parser): Token =
+  let token = current_token(parser)
+  if parser.current < parser.tokens.length() - 1 then
+    parser.current = parser.current + 1
+  end
+  token
+
+# 토큰 타입 확인
+function check(parser: Parser, type_: TokenType): Bool =
+  current_token(parser).type == type_
+
+# 토큰 타입 일치하고 이동
+function match(parser: Parser, type_: TokenType): Bool =
+  if check(parser, type_) then
+    next_token(parser)
+    true
+  else
+    false
+  end
+
+# EOF 도달 확인
+function is_at_end(parser: Parser): Bool =
+  check(parser, EOF_TOKEN)
+
+# 에러 추가
+function add_error(parser: Parser, message: String): Void =
+  let token = current_token(parser)
+  let error_msg = "Error at line " + token.line.to_string() +
+                  ", column " + token.column.to_string() +
+                  ": " + message
+  parser.errors.push(error_msg)
+
+# ==========================================
+# AST 생성 헬퍼
+# ==========================================
+
+# 간단한 AST 노드 생성
+function make_node(type_: String, name: String, value: String): ASTNode =
+  ASTNode {
+    type: type_,
+    name: name,
+    value: value,
+    line: 0,
+    column: 0,
+    children: [],
+    properties: []
+  }
+
+# 자식 노드 추가
+function add_child(node: ASTNode, child: ASTNode): Void =
+  node.children.push(child)
+
+# 속성 추가
+function add_property(node: ASTNode, key: String, value: String): Void =
+  node.properties.push((key, value))
+
+# ==========================================
+# 표현식 파싱
+# ==========================================
+
+# 기본 표현식 (리터럴, 식별자, 괄호)
+function parse_primary(parser: Parser): ASTNode =
+  let token = current_token(parser)
+
+  match token.type {
+    INT -> {
+      next_token(parser)
+      make_node("literal", "int", token.value)
+    },
+    FLOAT -> {
+      next_token(parser)
+      make_node("literal", "float", token.value)
+    },
+    STRING -> {
+      next_token(parser)
+      make_node("literal", "string", token.value)
+    },
+    BOOL -> {
+      next_token(parser)
+      make_node("literal", "bool", token.value)
+    },
+    NIL -> {
+      next_token(parser)
+      make_node("literal", "nil", "")
+    },
+    IDENT -> {
+      next_token(parser)
+      make_node("identifier", token.value, "")
+    },
+    LPAREN -> {
+      next_token(parser)  # skip '('
+      let expr = parse_expression(parser)
+      if not match(parser, RPAREN) then
+        add_error(parser, "Expected ')' after expression")
+      end
+      expr
+    },
+    _ -> {
+      add_error(parser, "Unexpected token: " + token.value)
+      make_node("error", "", "")
+    }
+  }
+
+# 단항 연산 (-x, !x)
+function parse_unary(parser: Parser): ASTNode =
+  if match(parser, MINUS) or match(parser, NOT) then
+    let op = current_token(parser)
+    let operand = parse_unary(parser)
+    let node = make_node("unary", "", "")
+    add_property(node, "operator", op.value)
+    add_child(node, operand)
+    node
+  else
+    parse_primary(parser)
+  end
+
+# 곱셈/나눗셈 (*, /)
+function parse_multiplicative(parser: Parser): ASTNode =
+  let left = parse_unary(parser)
+
+  while check(parser, MULTIPLY) or check(parser, DIVIDE) or check(parser, MODULO) do
+    let op = current_token(parser)
+    next_token(parser)
+    let right = parse_unary(parser)
+    let node = make_node("binary", "", "")
+    add_property(node, "operator", op.value)
+    add_child(node, left)
+    add_child(node, right)
+    left = node
+  end
+
+  left
+
+# 덧셈/뺄셈 (+, -)
+function parse_additive(parser: Parser): ASTNode =
+  let left = parse_multiplicative(parser)
+
+  while check(parser, PLUS) or check(parser, MINUS) do
+    let op = current_token(parser)
+    next_token(parser)
+    let right = parse_multiplicative(parser)
+    let node = make_node("binary", "", "")
+    add_property(node, "operator", op.value)
+    add_child(node, left)
+    add_child(node, right)
+    left = node
+  end
+
+  left
+
+# 비교 연산 (<, >, ==, !=)
+function parse_comparison(parser: Parser): ASTNode =
+  let left = parse_additive(parser)
+
+  while check(parser, LT) or check(parser, LE) or
+        check(parser, GT) or check(parser, GE) or
+        check(parser, EQ) or check(parser, NEQ) do
+    let op = current_token(parser)
+    next_token(parser)
+    let right = parse_additive(parser)
+    let node = make_node("binary", "", "")
+    add_property(node, "operator", op.value)
+    add_child(node, left)
+    add_child(node, right)
+    left = node
+  end
+
+  left
+
+# 논리 AND
+function parse_logical_and(parser: Parser): ASTNode =
+  let left = parse_comparison(parser)
+
+  while check(parser, AND) do
+    next_token(parser)
+    let right = parse_comparison(parser)
+    let node = make_node("binary", "", "")
+    add_property(node, "operator", "&&")
+    add_child(node, left)
+    add_child(node, right)
+    left = node
+  end
+
+  left
+
+# 논리 OR
+function parse_logical_or(parser: Parser): ASTNode =
+  let left = parse_logical_and(parser)
+
+  while check(parser, OR) do
+    next_token(parser)
+    let right = parse_logical_and(parser)
+    let node = make_node("binary", "", "")
+    add_property(node, "operator", "||")
+    add_child(node, left)
+    add_child(node, right)
+    left = node
+  end
+
+  left
+
+# 함수 호출 & 배열 인덱싱
+function parse_postfix(parser: Parser): ASTNode =
+  let expr = parse_logical_or(parser)
+
+  while true do
+    if check(parser, LPAREN) then
+      # 함수 호출
+      next_token(parser)
+      let call_node = make_node("call", "", "")
+      add_child(call_node, expr)
+
+      # 파라미터 파싱
+      while not check(parser, RPAREN) and not is_at_end(parser) do
+        let arg = parse_expression(parser)
+        add_child(call_node, arg)
+        if not check(parser, RPAREN) then
+          if not match(parser, COMMA) then break
+        end
+      end
+
+      if not match(parser, RPAREN) then
+        add_error(parser, "Expected ')' after arguments")
+      end
+      expr = call_node
+    else if check(parser, LBRACKET) then
+      # 배열 인덱싱
+      next_token(parser)
+      let index_node = make_node("index", "", "")
+      add_child(index_node, expr)
+      let index = parse_expression(parser)
+      add_child(index_node, index)
+
+      if not match(parser, RBRACKET) then
+        add_error(parser, "Expected ']' after index")
+      end
+      expr = index_node
+    else if check(parser, DOT) then
+      # 멤버 접근
+      next_token(parser)
+      let field_name = current_token(parser).value
+      next_token(parser)
+      let member_node = make_node("member", field_name, "")
+      add_child(member_node, expr)
+      expr = member_node
+    else
+      break
+    end
+  end
+
+  expr
+
+# 전체 표현식 파싱
+function parse_expression(parser: Parser): ASTNode =
+  parse_postfix(parser)
+
+# ==========================================
+# 문장 파싱
+# ==========================================
+
+# let 바인딩
+function parse_let(parser: Parser): ASTNode =
+  next_token(parser)  # skip 'let'
+  let var_name = current_token(parser).value
+  next_token(parser)  # skip name
+
+  let node = make_node("let", var_name, "")
+
+  # 타입 annotation (선택)
+  if match(parser, COLON) then
+    let type_name = current_token(parser).value
+    next_token(parser)
+    add_property(node, "type", type_name)
+  end
+
+  # 초기값
+  if match(parser, ASSIGN) then
+    let value = parse_expression(parser)
+    add_child(node, value)
+  end
+
+  node
+
+# if 문
+function parse_if(parser: Parser): ASTNode =
+  next_token(parser)  # skip 'if'
+  let condition = parse_expression(parser)
+
+  let node = make_node("if", "", "")
+  add_child(node, condition)
+
+  # then 블록
+  if match(parser, KEYWORD_LET) or match(parser, LBRACE) then
+    # body parsing (simplified)
+    let body = make_node("block", "", "")
+    add_child(node, body)
+  end
+
+  # else 블록 (선택)
+  if match(parser, KEYWORD_ELSE) then
+    let else_node = make_node("else", "", "")
+    # else body (simplified)
+    add_child(node, else_node)
+  end
+
+  node
+
+# for 루프
+function parse_for(parser: Parser): ASTNode =
+  next_token(parser)  # skip 'for'
+  let var_name = current_token(parser).value
+  next_token(parser)
+
+  let node = make_node("for", var_name, "")
+
+  # 'in' 키워드는 KEYWORD_IF처럼 처리 (간단히)
+  # 실제로는 'in' 토큰 필요
+  let iter = parse_expression(parser)
+  add_child(node, iter)
+
+  # body
+  if match(parser, KEYWORD_LET) or match(parser, LBRACE) then
+    let body = make_node("block", "", "")
+    add_child(node, body)
+  end
+
+  node
+
+# match 표현식
+function parse_match(parser: Parser): ASTNode =
+  next_token(parser)  # skip 'match'
+  let expr = parse_expression(parser)
+
+  let node = make_node("match", "", "")
+  add_child(node, expr)
+
+  if match(parser, LBRACE) then
+    while not check(parser, RBRACE) and not is_at_end(parser) do
+      # pattern -> body
+      let pattern = current_token(parser).value
+      next_token(parser)
+
+      if match(parser, FAT_ARROW) then
+        let body = parse_expression(parser)
+        let case_node = make_node("case", pattern, "")
+        add_child(case_node, body)
+        add_child(node, case_node)
+      end
+
+      if not check(parser, RBRACE) then
+        if not match(parser, COMMA) then break
+      end
+    end
+
+    if not match(parser, RBRACE) then
+      add_error(parser, "Expected '}' after match cases")
+    end
+  end
+
+  node
+
+# return 문
+function parse_return(parser: Parser): ASTNode =
+  next_token(parser)  # skip 'return'
+  let node = make_node("return", "", "")
+
+  if not check(parser, SEMICOLON) and not check(parser, RBRACE) then
+    let value = parse_expression(parser)
+    add_child(node, value)
+  end
+
+  node
+
+# ==========================================
+# 선언 파싱
+# ==========================================
+
+# 함수 정의
+function parse_function(parser: Parser): ASTNode =
+  next_token(parser)  # skip 'fn'
+  let func_name = current_token(parser).value
+  next_token(parser)
+
+  let node = make_node("function", func_name, "")
+
+  # 파라미터
+  if match(parser, LPAREN) then
+    while not check(parser, RPAREN) and not is_at_end(parser) do
+      let param_name = current_token(parser).value
+      next_token(parser)
+
+      if match(parser, COLON) then
+        let param_type = current_token(parser).value
+        next_token(parser)
+        let param = make_node("parameter", param_name, "")
+        add_property(param, "type", param_type)
+        add_child(node, param)
+      end
+
+      if not check(parser, RPAREN) then
+        if not match(parser, COMMA) then break
+      end
+    end
+
+    if not match(parser, RPAREN) then
+      add_error(parser, "Expected ')' after parameters")
+    end
+  end
+
+  # 반환 타입
+  if match(parser, COLON) then
+    let return_type = current_token(parser).value
+    next_token(parser)
+    add_property(node, "return_type", return_type)
+  end
+
+  # 함수 본문
+  if match(parser, ASSIGN) then
+    let body = parse_expression(parser)
+    add_child(node, body)
+  end
+
+  node
+
+# 구조체 정의
+function parse_struct(parser: Parser): ASTNode =
+  next_token(parser)  # skip 'struct'
+  let struct_name = current_token(parser).value
+  next_token(parser)
+
+  let node = make_node("struct", struct_name, "")
+
+  if match(parser, LBRACE) then
+    while not check(parser, RBRACE) and not is_at_end(parser) do
+      let field_name = current_token(parser).value
+      next_token(parser)
+
+      if match(parser, COLON) then
+        let field_type = current_token(parser).value
+        next_token(parser)
+        let field = make_node("field", field_name, "")
+        add_property(field, "type", field_type)
+        add_child(node, field)
+      end
+
+      if not check(parser, RBRACE) then
+        if not match(parser, COMMA) then break
+      end
+    end
+
+    if not match(parser, RBRACE) then
+      add_error(parser, "Expected '}' after struct fields")
+    end
+  end
+
+  node
+
+# record 정의 (FreeJulia 특화)
+function parse_record(parser: Parser): ASTNode =
+  next_token(parser)  # skip 'record'
+  let record_name = current_token(parser).value
+  next_token(parser)
+
+  let node = make_node("record", record_name, "")
+
+  if match(parser, ASSIGN) then
+    # 레코드 필드 파싱
+    while not check(parser, EOF_TOKEN) do
+      let field_name = current_token(parser).value
+      next_token(parser)
+
+      if match(parser, COLON) then
+        let field_type = current_token(parser).value
+        next_token(parser)
+        let field = make_node("field", field_name, "")
+        add_property(field, "type", field_type)
+        add_child(node, field)
+      end
+
+      if not match(parser, COMMA) then break
+    end
+  end
+
+  node
+
+# enum 정의
+function parse_enum(parser: Parser): ASTNode =
+  next_token(parser)  # skip 'enum'
+  let enum_name = current_token(parser).value
+  next_token(parser)
+
+  let node = make_node("enum", enum_name, "")
+
+  if match(parser, ASSIGN) then
+    while not check(parser, EOF_TOKEN) do
+      let variant = current_token(parser).value
+      next_token(parser)
+      let variant_node = make_node("variant", variant, "")
+      add_child(node, variant_node)
+
+      if not match(parser, PIPE) then break
+    end
+  end
+
+  node
+
+# 프로그램 파싱
+function parse_program(parser: Parser): ASTNode =
+  let program = make_node("program", "", "")
+
+  while not is_at_end(parser) do
+    if check(parser, KEYWORD_FN) then
+      let func = parse_function(parser)
+      add_child(program, func)
+    else if check(parser, KEYWORD_STRUCT) then
+      let struct_ = parse_struct(parser)
+      add_child(program, struct_)
+    else if check(parser, KEYWORD_RECORD) then
+      let record = parse_record(parser)
+      add_child(program, record)
+    else if check(parser, KEYWORD_ENUM) then
+      let enum_ = parse_enum(parser)
+      add_child(program, enum_)
+    else if check(parser, KEYWORD_LET) then
+      let let_ = parse_let(parser)
+      add_child(program, let_)
+    else if check(parser, KEYWORD_IF) then
+      let if_ = parse_if(parser)
+      add_child(program, if_)
+    else
+      next_token(parser)
+    end
+  end
+
+  program
+
+# ==========================================
+# 메인 파싱 함수
+# ==========================================
+
+function parse(tokens: Array[Token]): ASTNode =
+  let parser = new_parser(tokens)
+  parse_program(parser)

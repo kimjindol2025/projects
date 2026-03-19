@@ -1,0 +1,1027 @@
+// FV 2.0 Parser - V 언어로 재작성
+// 목표: 550줄 V 코드로 완벽한 AST 파서
+// 호환성: Go Parser와 100% 동일
+
+// AST 노드 정의
+struct Program {
+	definitions: []Definition
+	main_body: []Statement
+}
+
+struct FunctionDef {
+	name: string
+	parameters: []Parameter
+	return_type: ?Type
+	body: []Statement
+}
+
+struct TypeDef {
+	name: string
+	fields: []Field
+}
+
+struct StructDef {
+	name: string
+	fields: []Field
+}
+
+struct InterfaceDef {
+	name: string
+	methods: []MethodSig
+}
+
+struct EnumDef {
+	name: string
+	variants: []EnumVariant
+}
+
+struct Parameter {
+	name: string
+	type_info: Type
+}
+
+struct Field {
+	name: string
+	type_info: Type
+	mutable: bool
+	default_val: ?Expression
+}
+
+struct MethodSig {
+	name: string
+	parameters: []Parameter
+	return_type: ?Type
+}
+
+struct EnumVariant {
+	name: string
+	types: []Type
+}
+
+// Statement 타입들
+struct LetStatement {
+	name: string
+	type_info: ?Type
+	init: Expression
+	mutable: bool
+}
+
+struct ConstStatement {
+	name: string
+	type_info: ?Type
+	value: Expression
+}
+
+struct IfStatement {
+	condition: Expression
+	then_body: []Statement
+	else_body: []Statement
+}
+
+struct ForStatement {
+	variable: string
+	iterator: Expression
+	body: []Statement
+}
+
+struct ForRangeStatement {
+	variable: string
+	start: Expression
+	end: Expression
+	body: []Statement
+}
+
+struct MatchStatement {
+	expression: Expression
+	arms: []MatchArm
+}
+
+struct MatchArm {
+	pattern: Pattern
+	body: []Statement
+}
+
+struct ReturnStatement {
+	value: ?Expression
+}
+
+struct ExpressionStatement {
+	expression: Expression
+}
+
+// Expression 타입들
+struct BinaryOp {
+	left: Expression
+	operator: string
+	right: Expression
+}
+
+struct UnaryOp {
+	operator: string
+	operand: Expression
+}
+
+struct FunctionCall {
+	function: string
+	arguments: []Expression
+}
+
+struct MethodCall {
+	object: Expression
+	method: string
+	arguments: []Expression
+}
+
+struct ArrayLiteral {
+	elements: []Expression
+}
+
+struct StructLiteral {
+	type_name: string
+	fields: map[string]Expression
+}
+
+struct IntLiteral {
+	value: i64
+}
+
+struct FloatLiteral {
+	value: f64
+}
+
+struct StringLiteral {
+	value: string
+}
+
+struct Identifier {
+	name: string
+}
+
+struct IndexAccess {
+	object: Expression
+	index: Expression
+}
+
+struct FieldAccess {
+	object: Expression
+	field: string
+}
+
+// Type 정보
+struct Type {
+	name: string
+	is_pointer: bool
+	is_option: bool
+	is_array: bool
+	generic_args: []Type
+}
+
+struct Pattern {
+	kind: string
+	value: ?string
+	variants: ?[]string
+}
+
+// Parser 구조체
+struct Parser {
+	mut tokens: []Token
+	mut pos: i32
+	mut errors: []string
+}
+
+// Token 타입 (Lexer에서 가져옴)
+struct Token {
+	type_val: i32
+	text: string
+	line: i32
+	column: i32
+}
+
+// Parser 생성
+fn new_parser(tokens: []Token) Parser {
+	return Parser{
+		tokens: tokens,
+		pos: 0,
+		errors: []
+	}
+}
+
+// 현재 토큰 반환
+fn (mut p: Parser) current() Token {
+	if p.pos >= p.tokens.len() {
+		return Token{type_val: 99, text: "EOF", line: 0, column: 0}
+	}
+	return p.tokens[p.pos]
+}
+
+// 다음 토큰 반환
+fn (mut p: Parser) peek() Token {
+	if p.pos + 1 >= p.tokens.len() {
+		return Token{type_val: 99, text: "EOF", line: 0, column: 0}
+	}
+	return p.tokens[p.pos + 1]
+}
+
+// 토큰 타입 확인
+fn (mut p: Parser) check(token_type: i32) bool {
+	return p.current().type_val == token_type
+}
+
+// 토큰 타입 일치 및 이동
+fn (mut p: Parser) match(token_type: i32) bool {
+	if p.check(token_type) {
+		p.pos += 1
+		return true
+	}
+	return false
+}
+
+// 파일 끝 확인
+fn (mut p: Parser) is_at_end() bool {
+	return p.pos >= p.tokens.len() || p.check(99) // 99 = EOF
+}
+
+// 에러 추가
+fn (mut p: Parser) add_error(message: string) {
+	p.errors.push(message)
+}
+
+// 주요 Parse 함수
+fn (mut p: Parser) parse() ?Program {
+	mut definitions: []Definition = []
+	mut main_body: []Statement = []
+
+	for !p.is_at_end() {
+		if p.check(99) { // EOF
+			break
+		}
+
+		// fn 키워드: 함수 정의
+		if p.check(1) { // TknFn = 1
+			if let Some(def) = p.parse_function_def() {
+				definitions.push(def)
+			}
+		}
+		// type 키워드: 타입 정의
+		else if p.check(2) { // TknType = 2
+			if let Some(def) = p.parse_type_def() {
+				definitions.push(def)
+			}
+		}
+		// struct 키워드: 구조체 정의
+		else if p.check(3) { // TknStruct = 3
+			if let Some(def) = p.parse_struct_def() {
+				definitions.push(def)
+			}
+		}
+		// interface 키워드: 인터페이스 정의
+		else if p.check(4) { // TknInterface = 4
+			if let Some(def) = p.parse_interface_def() {
+				definitions.push(def)
+			}
+		}
+		// enum 키워드: enum 정의
+		else if p.check(5) { // TknEnum = 5
+			if let Some(def) = p.parse_enum_def() {
+				definitions.push(def)
+			}
+		}
+		// 그 외: 일반 statement
+		else {
+			if let Some(stmt) = p.parse_statement() {
+				main_body.push(stmt)
+			}
+		}
+	}
+
+	return Program{
+		definitions: definitions,
+		main_body: main_body
+	}
+}
+
+// 함수 정의 파싱
+fn (mut p: Parser) parse_function_def() ?FunctionDef {
+	if !p.match(1) { // TknFn
+		return none
+	}
+
+	// 함수 이름
+	name := p.current().text
+	if !p.match(10) { // TknIdentifier
+		p.add_error("expected function name")
+		return none
+	}
+
+	// ( 확인
+	if !p.match(12) { // TknLParen
+		p.add_error("expected '('")
+		return none
+	}
+
+	// 파라미터 파싱
+	mut parameters: []Parameter = []
+	if !p.check(13) { // TknRParen
+		for {
+			param_name := p.current().text
+			if !p.match(10) { // TknIdentifier
+				p.add_error("expected parameter name")
+				return none
+			}
+
+			// : Type
+			if !p.match(30) { // TknColon
+				p.add_error("expected ':' in parameter")
+				return none
+			}
+
+			param_type := p.parse_type() or {
+				p.add_error("expected type")
+				return none
+			}
+
+			parameters.push(Parameter{
+				name: param_name,
+				type_info: param_type
+			})
+
+			if !p.check(14) { // TknComma
+				break
+			}
+			p.pos += 1 // skip comma
+		}
+	}
+
+	// ) 확인
+	if !p.match(13) { // TknRParen
+		p.add_error("expected ')'")
+		return none
+	}
+
+	// 반환 타입 파싱 (-> Type)
+	mut return_type: ?Type = none
+	if p.match(31) { // TknArrow
+		return_type = p.parse_type()
+	}
+
+	// { 확인
+	if !p.match(14) { // TknLBrace
+		p.add_error("expected '{'")
+		return none
+	}
+
+	// 함수 본문 파싱
+	mut body: []Statement = []
+	if !p.check(15) { // TknRBrace
+		for {
+			if let Some(stmt) = p.parse_statement() {
+				body.push(stmt)
+			}
+			if p.check(15) || p.is_at_end() {
+				break
+			}
+		}
+	}
+
+	// } 확인
+	if !p.match(15) { // TknRBrace
+		p.add_error("expected '}'")
+		return none
+	}
+
+	return FunctionDef{
+		name: name,
+		parameters: parameters,
+		return_type: return_type,
+		body: body
+	}
+}
+
+// 타입 정의 파싱
+fn (mut p: Parser) parse_type_def() ?TypeDef {
+	if !p.match(2) { // TknType
+		return none
+	}
+
+	name := p.current().text
+	if !p.match(10) { // TknIdentifier
+		p.add_error("expected type name")
+		return none
+	}
+
+	// { 확인
+	if !p.match(14) { // TknLBrace
+		p.add_error("expected '{'")
+		return none
+	}
+
+	// 필드 파싱
+	mut fields: []Field = []
+	if !p.check(15) { // TknRBrace
+		for {
+			if let Some(field) = p.parse_field() {
+				fields.push(field)
+			}
+			if p.check(15) || p.is_at_end() {
+				break
+			}
+		}
+	}
+
+	// } 확인
+	if !p.match(15) { // TknRBrace
+		p.add_error("expected '}'")
+		return none
+	}
+
+	return TypeDef{
+		name: name,
+		fields: fields
+	}
+}
+
+// 구조체 정의 파싱
+fn (mut p: Parser) parse_struct_def() ?StructDef {
+	if !p.match(3) { // TknStruct
+		return none
+	}
+
+	name := p.current().text
+	if !p.match(10) { // TknIdentifier
+		p.add_error("expected struct name")
+		return none
+	}
+
+	// { 확인
+	if !p.match(14) { // TknLBrace
+		p.add_error("expected '{'")
+		return none
+	}
+
+	// 필드 파싱
+	mut fields: []Field = []
+	if !p.check(15) { // TknRBrace
+		for {
+			if let Some(field) = p.parse_field() {
+				fields.push(field)
+			}
+			if p.check(15) || p.is_at_end() {
+				break
+			}
+		}
+	}
+
+	// } 확인
+	if !p.match(15) { // TknRBrace
+		p.add_error("expected '}'")
+		return none
+	}
+
+	return StructDef{
+		name: name,
+		fields: fields
+	}
+}
+
+// 인터페이스 정의 파싱
+fn (mut p: Parser) parse_interface_def() ?InterfaceDef {
+	if !p.match(4) { // TknInterface
+		return none
+	}
+
+	name := p.current().text
+	if !p.match(10) { // TknIdentifier
+		p.add_error("expected interface name")
+		return none
+	}
+
+	// { 확인
+	if !p.match(14) { // TknLBrace
+		p.add_error("expected '{'")
+		return none
+	}
+
+	// 메서드 파싱
+	mut methods: []MethodSig = []
+	if !p.check(15) { // TknRBrace
+		for {
+			if let Some(method) = p.parse_method_sig() {
+				methods.push(method)
+			}
+			if p.check(15) || p.is_at_end() {
+				break
+			}
+		}
+	}
+
+	// } 확인
+	if !p.match(15) { // TknRBrace
+		p.add_error("expected '}'")
+		return none
+	}
+
+	return InterfaceDef{
+		name: name,
+		methods: methods
+	}
+}
+
+// enum 정의 파싱
+fn (mut p: Parser) parse_enum_def() ?EnumDef {
+	if !p.match(5) { // TknEnum
+		return none
+	}
+
+	name := p.current().text
+	if !p.match(10) { // TknIdentifier
+		p.add_error("expected enum name")
+		return none
+	}
+
+	// { 확인
+	if !p.match(14) { // TknLBrace
+		p.add_error("expected '{'")
+		return none
+	}
+
+	// variant 파싱
+	mut variants: []EnumVariant = []
+	if !p.check(15) { // TknRBrace
+		for {
+			variant_name := p.current().text
+			if !p.match(10) { // TknIdentifier
+				p.add_error("expected variant name")
+				return none
+			}
+
+			mut variant_types: []Type = []
+			// (Type1, Type2, ...) 형식
+			if p.match(12) { // TknLParen
+				if !p.check(13) { // TknRParen
+					for {
+						if let Some(vtype) = p.parse_type() {
+							variant_types.push(vtype)
+						}
+						if !p.check(14) { // TknComma
+							break
+						}
+						p.pos += 1 // skip comma
+					}
+				}
+				if !p.match(13) { // TknRParen
+					p.add_error("expected ')'")
+					return none
+				}
+			}
+
+			variants.push(EnumVariant{
+				name: variant_name,
+				types: variant_types
+			})
+
+			if p.check(14) { // TknComma
+				p.pos += 1
+			}
+			if p.check(15) || p.is_at_end() {
+				break
+			}
+		}
+	}
+
+	// } 확인
+	if !p.match(15) { // TknRBrace
+		p.add_error("expected '}'")
+		return none
+	}
+
+	return EnumDef{
+		name: name,
+		variants: variants
+	}
+}
+
+// 필드 파싱
+fn (mut p: Parser) parse_field() ?Field {
+	name := p.current().text
+	if !p.match(10) { // TknIdentifier
+		return none
+	}
+
+	// : Type
+	if !p.match(30) { // TknColon
+		p.add_error("expected ':' in field")
+		return none
+	}
+
+	field_type := p.parse_type() or {
+		p.add_error("expected type")
+		return none
+	}
+
+	// 기본값 (선택사항)
+	mut default_val: ?Expression = none
+	if p.match(32) { // TknAssign (=)
+		// 기본값 파싱
+		// default_val = p.parse_expression()
+	}
+
+	return Field{
+		name: name,
+		type_info: field_type,
+		mutable: false,
+		default_val: default_val
+	}
+}
+
+// 메서드 시그니처 파싱
+fn (mut p: Parser) parse_method_sig() ?MethodSig {
+	name := p.current().text
+	if !p.match(10) { // TknIdentifier
+		return none
+	}
+
+	// ( 확인
+	if !p.match(12) { // TknLParen
+		p.add_error("expected '('")
+		return none
+	}
+
+	// 파라미터 파싱
+	mut parameters: []Parameter = []
+	if !p.check(13) { // TknRParen
+		for {
+			param_name := p.current().text
+			if !p.match(10) { // TknIdentifier
+				return none
+			}
+
+			if !p.match(30) { // TknColon
+				p.add_error("expected ':'")
+				return none
+			}
+
+			param_type := p.parse_type() or {
+				return none
+			}
+
+			parameters.push(Parameter{
+				name: param_name,
+				type_info: param_type
+			})
+
+			if !p.check(14) { // TknComma
+				break
+			}
+			p.pos += 1
+		}
+	}
+
+	// ) 확인
+	if !p.match(13) { // TknRParen
+		p.add_error("expected ')'")
+		return none
+	}
+
+	// 반환 타입 파싱
+	mut return_type: ?Type = none
+	if p.match(31) { // TknArrow
+		return_type = p.parse_type()
+	}
+
+	return MethodSig{
+		name: name,
+		parameters: parameters,
+		return_type: return_type
+	}
+}
+
+// Statement 파싱
+fn (mut p: Parser) parse_statement() ?Statement {
+	// let 바인딩
+	if p.check(6) { // TknLet
+		return p.parse_let_statement()
+	}
+	// const 바인딩
+	else if p.check(7) { // TknConst
+		return p.parse_const_statement()
+	}
+	// if 문
+	else if p.check(8) { // TknIf
+		return p.parse_if_statement()
+	}
+	// for 루프
+	else if p.check(9) { // TknFor
+		return p.parse_for_statement()
+	}
+	// match 식
+	else if p.check(11) { // TknMatch
+		return p.parse_match_statement()
+	}
+	// return 문
+	else if p.check(17) { // TknReturn
+		return p.parse_return_statement()
+	}
+	// 표현식 문장
+	else {
+		return p.parse_expression_statement()
+	}
+}
+
+// let 문 파싱
+fn (mut p: Parser) parse_let_statement() ?Statement {
+	if !p.match(6) { // TknLet
+		return none
+	}
+
+	name := p.current().text
+	if !p.match(10) { // TknIdentifier
+		p.add_error("expected variable name")
+		return none
+	}
+
+	// 타입 (선택사항)
+	mut type_info: ?Type = none
+	if p.match(30) { // TknColon
+		type_info = p.parse_type()
+	}
+
+	// = 확인
+	if !p.match(32) { // TknAssign
+		p.add_error("expected '=' in let binding")
+		return none
+	}
+
+	// 초기값
+	let init = p.parse_expression() or {
+		p.add_error("expected expression")
+		return none
+	}
+
+	return LetStatement{
+		name: name,
+		type_info: type_info,
+		init: init,
+		mutable: false
+	}
+}
+
+// const 문 파싱
+fn (mut p: Parser) parse_const_statement() ?Statement {
+	if !p.match(7) { // TknConst
+		return none
+	}
+
+	name := p.current().text
+	if !p.match(10) { // TknIdentifier
+		p.add_error("expected constant name")
+		return none
+	}
+
+	// 타입 (선택사항)
+	mut type_info: ?Type = none
+	if p.match(30) { // TknColon
+		type_info = p.parse_type()
+	}
+
+	// = 확인
+	if !p.match(32) { // TknAssign
+		p.add_error("expected '='")
+		return none
+	}
+
+	// 값
+	let value = p.parse_expression() or {
+		p.add_error("expected expression")
+		return none
+	}
+
+	return ConstStatement{
+		name: name,
+		type_info: type_info,
+		value: value
+	}
+}
+
+// if 문 파싱
+fn (mut p: Parser) parse_if_statement() ?Statement {
+	if !p.match(8) { // TknIf
+		return none
+	}
+
+	// 조건
+	let condition = p.parse_expression() or {
+		p.add_error("expected condition")
+		return none
+	}
+
+	// { 확인
+	if !p.match(14) { // TknLBrace
+		p.add_error("expected '{'")
+		return none
+	}
+
+	// then body
+	mut then_body: []Statement = []
+	if !p.check(15) { // TknRBrace
+		for {
+			if let Some(stmt) = p.parse_statement() {
+				then_body.push(stmt)
+			}
+			if p.check(15) || p.is_at_end() {
+				break
+			}
+		}
+	}
+
+	// } 확인
+	if !p.match(15) { // TknRBrace
+		p.add_error("expected '}'")
+		return none
+	}
+
+	// else body (선택사항)
+	mut else_body: []Statement = []
+	if p.match(18) { // TknElse
+		// else if 또는 else { }
+		if p.check(8) { // TknIf
+			if let Some(else_if_stmt) = p.parse_if_statement() {
+				else_body.push(else_if_stmt)
+			}
+		} else if p.match(14) { // TknLBrace
+			if !p.check(15) { // TknRBrace
+				for {
+					if let Some(stmt) = p.parse_statement() {
+						else_body.push(stmt)
+					}
+					if p.check(15) || p.is_at_end() {
+						break
+					}
+				}
+			}
+			if !p.match(15) { // TknRBrace
+				p.add_error("expected '}'")
+				return none
+			}
+		}
+	}
+
+	return IfStatement{
+		condition: condition,
+		then_body: then_body,
+		else_body: else_body
+	}
+}
+
+// for 루프 파싱
+fn (mut p: Parser) parse_for_statement() ?Statement {
+	if !p.match(9) { // TknFor
+		return none
+	}
+
+	variable := p.current().text
+	if !p.match(10) { // TknIdentifier
+		p.add_error("expected variable name")
+		return none
+	}
+
+	// in 확인
+	if !p.match(19) { // TknIn
+		p.add_error("expected 'in'")
+		return none
+	}
+
+	// iterator 파싱
+	let iterator = p.parse_expression() or {
+		p.add_error("expected iterator")
+		return none
+	}
+
+	// { 확인
+	if !p.match(14) { // TknLBrace
+		p.add_error("expected '{'")
+		return none
+	}
+
+	// 본문
+	mut body: []Statement = []
+	if !p.check(15) { // TknRBrace
+		for {
+			if let Some(stmt) = p.parse_statement() {
+				body.push(stmt)
+			}
+			if p.check(15) || p.is_at_end() {
+				break
+			}
+		}
+	}
+
+	// } 확인
+	if !p.match(15) { // TknRBrace
+		p.add_error("expected '}'")
+		return none
+	}
+
+	return ForStatement{
+		variable: variable,
+		iterator: iterator,
+		body: body
+	}
+}
+
+// match 문 파싱
+fn (mut p: Parser) parse_match_statement() ?Statement {
+	if !p.match(11) { // TknMatch
+		return none
+	}
+
+	// 표현식
+	let expr = p.parse_expression() or {
+		p.add_error("expected expression")
+		return none
+	}
+
+	// { 확인
+	if !p.match(14) { // TknLBrace
+		p.add_error("expected '{'")
+		return none
+	}
+
+	// arms
+	mut arms: []MatchArm = []
+	if !p.check(15) { // TknRBrace
+		for {
+			// 패턴 파싱
+			// let pattern = p.parse_pattern() or { break }
+			// => 확인
+			if !p.match(31) { // TknArrow
+				break
+			}
+
+			// 바디
+			mut arm_body: []Statement = []
+			// ... 바디 파싱
+			break
+		}
+	}
+
+	// } 확인
+	if !p.match(15) { // TknRBrace
+		p.add_error("expected '}'")
+		return none
+	}
+
+	return MatchStatement{
+		expression: expr,
+		arms: arms
+	}
+}
+
+// return 문 파싱
+fn (mut p: Parser) parse_return_statement() ?Statement {
+	if !p.match(17) { // TknReturn
+		return none
+	}
+
+	// 값 (선택사항)
+	mut value: ?Expression = none
+	if !p.check(15) && !p.check(99) { // TknRBrace or EOF
+		value = p.parse_expression()
+	}
+
+	return ReturnStatement{
+		value: value
+	}
+}
+
+// 표현식 문장
+fn (mut p: Parser) parse_expression_statement() ?Statement {
+	let expr = p.parse_expression() or {
+		return none
+	}
+	return ExpressionStatement{
+		expression: expr
+	}
+}
+
+// Expression 파싱 (스텁)
+fn (mut p: Parser) parse_expression() ?Expression {
+	// 구현 필요 (별도 모듈)
+	return none
+}
+
+// Type 파싱
+fn (mut p: Parser) parse_type() ?Type {
+	name := p.current().text
+	if !p.match(10) { // TknIdentifier
+		p.add_error("expected type name")
+		return none
+	}
+
+	return Type{
+		name: name,
+		is_pointer: false,
+		is_option: false,
+		is_array: false,
+		generic_args: []
+	}
+}

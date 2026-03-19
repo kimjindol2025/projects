@@ -1,0 +1,506 @@
+// FV 2.0 Code Generator - V 언어로 재작성
+// 목표: 600줄 V 코드로 완벽한 AST → C 코드 변환
+// 호환성: Go Code Generator와 100% 동일
+
+// ============= C 코드 생성기 =============
+
+struct CodeGenerator {
+	mut output: string
+	mut indent_level: i32
+	mut includes: []string
+	mut function_declarations: []string
+	mut errors: []string
+}
+
+// ============= 초기화 =============
+
+fn new_code_generator() CodeGenerator {
+	return CodeGenerator{
+		output: "",
+		indent_level: 0,
+		includes: [],
+		function_declarations: [],
+		errors: []
+	}
+}
+
+// ============= 헬퍼 함수 =============
+
+fn (mut cg: CodeGenerator) add_include(header: string) {
+	if header not in cg.includes {
+		cg.includes.push(header)
+	}
+}
+
+fn (mut cg: CodeGenerator) get_indent() string {
+	return "  ".repeat(cg.indent_level)
+}
+
+fn (mut cg: CodeGenerator) emit(code: string) {
+	cg.output += code
+}
+
+fn (mut cg: CodeGenerator) emit_line(code: string) {
+	cg.output += cg.get_indent() + code + "\n"
+}
+
+fn (mut cg: CodeGenerator) emit_blank_line() {
+	cg.output += "\n"
+}
+
+fn (mut cg: CodeGenerator) push_indent() {
+	cg.indent_level += 1
+}
+
+fn (mut cg: CodeGenerator) pop_indent() {
+	if cg.indent_level > 0 {
+		cg.indent_level -= 1
+	}
+}
+
+// ============= 타입 매핑 =============
+
+fn type_to_c(fv_type: string) string {
+	return match fv_type {
+		"i32" => "int"
+		"i64" => "long long"
+		"f32" => "float"
+		"f64" => "double"
+		"bool" => "bool"
+		"string" => "char*"
+		"void" => "void"
+		"byte" => "unsigned char"
+		"rune" => "int"
+		_ => "void"
+	}
+}
+
+fn (mut cg: CodeGenerator) type_to_c_with_includes(fv_type: string) string {
+	if fv_type == "bool" {
+		cg.add_include("<stdbool.h>")
+	}
+	if fv_type == "string" {
+		cg.add_include("<string.h>")
+	}
+	return type_to_c(fv_type)
+}
+
+// ============= 헤더 생성 =============
+
+fn (mut cg: CodeGenerator) generate_headers() {
+	cg.emit_line("#include <stdio.h>")
+	cg.emit_line("#include <stdlib.h>")
+
+	// 사용자 정의 includes 추가
+	for include in cg.includes {
+		if include not in ["<stdio.h>", "<stdlib.h>"] {
+			cg.emit_line("#include ${include}")
+		}
+	}
+
+	cg.emit_blank_line()
+}
+
+// ============= 함수 선언 =============
+
+fn (mut cg: CodeGenerator) add_function_declaration(decl: string) {
+	if decl not in cg.function_declarations {
+		cg.function_declarations.push(decl)
+	}
+}
+
+fn (mut cg: CodeGenerator) generate_function_declarations() {
+	if cg.function_declarations.len() == 0 {
+		return
+	}
+
+	for decl in cg.function_declarations {
+		cg.emit_line(decl + ";")
+	}
+
+	cg.emit_blank_line()
+}
+
+// ============= 함수 정의 생성 =============
+
+fn (mut cg: CodeGenerator) generate_function(
+	name: string,
+	params: []string,
+	return_type: string,
+	body: string
+) {
+	let c_return_type = cg.type_to_c_with_includes(return_type)
+
+	// 함수 선언 추가
+	let param_str = params.join(", ")
+	let decl = "${c_return_type} ${name}(${param_str})"
+	cg.add_function_declaration(decl)
+
+	// 함수 정의 생성
+	cg.emit_line("${c_return_type} ${name}(${param_str}) {")
+	cg.push_indent()
+	cg.emit(body)
+	cg.pop_indent()
+	cg.emit_line("}")
+	cg.emit_blank_line()
+}
+
+// ============= 변수 선언 생성 =============
+
+fn (mut cg: CodeGenerator) generate_variable_declaration(
+	name: string,
+	var_type: string,
+	init_value: ?string
+) {
+	let c_type = cg.type_to_c_with_includes(var_type)
+
+	if let Some(init) = init_value {
+		cg.emit_line("${c_type} ${name} = ${init};")
+	} else {
+		cg.emit_line("${c_type} ${name};")
+	}
+}
+
+// ============= 할당문 생성 =============
+
+fn (mut cg: CodeGenerator) generate_assignment(name: string, value: string) {
+	cg.emit_line("${name} = ${value};")
+}
+
+// ============= 리터럴 생성 =============
+
+fn (mut cg: CodeGenerator) generate_int_literal(value: string) string {
+	return value
+}
+
+fn (mut cg: CodeGenerator) generate_float_literal(value: string) string {
+	return value
+}
+
+fn (mut cg: CodeGenerator) generate_string_literal(value: string) string {
+	// 이스케이프 처리
+	let escaped = value.replace("\\", "\\\\").replace("\"", "\\\"")
+	return "\"${escaped}\""
+}
+
+fn (mut cg: CodeGenerator) generate_bool_literal(value: string) string {
+	return value
+}
+
+// ============= 연산 생성 =============
+
+fn (mut cg: CodeGenerator) generate_binary_op(
+	left: string,
+	operator: string,
+	right: string
+) string {
+	return "(${left} ${operator} ${right})"
+}
+
+fn (mut cg: CodeGenerator) generate_unary_op(operator: string, operand: string) string {
+	return "${operator}(${operand})"
+}
+
+// ============= 함수 호출 생성 =============
+
+fn (mut cg: CodeGenerator) generate_function_call(func_name: string, args: []string) string {
+	let args_str = args.join(", ")
+	return "${func_name}(${args_str})"
+}
+
+// ============= 배열 생성 =============
+
+fn (mut cg: CodeGenerator) generate_array_declaration(
+	name: string,
+	element_type: string,
+	size: string
+) {
+	let c_type = cg.type_to_c_with_includes(element_type)
+	cg.emit_line("${c_type} ${name}[${size}];")
+}
+
+fn (mut cg: CodeGenerator) generate_array_access(array_name: string, index: string) string {
+	return "${array_name}[${index}]"
+}
+
+fn (mut cg: CodeGenerator) generate_array_literal(elements: []string) string {
+	let elements_str = elements.join(", ")
+	return "{${elements_str}}"
+}
+
+// ============= 구조체 생성 =============
+
+fn (mut cg: CodeGenerator) generate_struct_definition(
+	name: string,
+	fields: map[string]string
+) {
+	cg.emit_line("typedef struct {")
+	cg.push_indent()
+
+	for field_name, field_type in fields {
+		let c_type = cg.type_to_c_with_includes(field_type)
+		cg.emit_line("${c_type} ${field_name};")
+	}
+
+	cg.pop_indent()
+	cg.emit_line("} ${name};")
+	cg.emit_blank_line()
+}
+
+// ============= if 문 생성 =============
+
+fn (mut cg: CodeGenerator) generate_if_statement(
+	condition: string,
+	then_body: string,
+	else_body: ?string
+) {
+	cg.emit_line("if (${condition}) {")
+	cg.push_indent()
+	cg.emit(then_body)
+	cg.pop_indent()
+
+	if let Some(ebody) = else_body {
+		cg.emit_line("} else {")
+		cg.push_indent()
+		cg.emit(ebody)
+		cg.pop_indent()
+	}
+
+	cg.emit_line("}")
+}
+
+// ============= for 루프 생성 =============
+
+fn (mut cg: CodeGenerator) generate_for_loop(
+	variable: string,
+	start: string,
+	end: string,
+	body: string
+) {
+	cg.emit_line("for (int ${variable} = ${start}; ${variable} < ${end}; ${variable}++) {")
+	cg.push_indent()
+	cg.emit(body)
+	cg.pop_indent()
+	cg.emit_line("}")
+}
+
+fn (mut cg: CodeGenerator) generate_while_loop(condition: string, body: string) {
+	cg.emit_line("while (${condition}) {")
+	cg.push_indent()
+	cg.emit(body)
+	cg.pop_indent()
+	cg.emit_line("}")
+}
+
+// ============= return 문 생성 =============
+
+fn (mut cg: CodeGenerator) generate_return(value: ?string) {
+	if let Some(v) = value {
+		cg.emit_line("return ${v};")
+	} else {
+		cg.emit_line("return;")
+	}
+}
+
+// ============= printf 생성 =============
+
+fn (mut cg: CodeGenerator) generate_printf(format: string, args: []string) string {
+	let args_list = if args.len() == 0 {
+		""
+	} else {
+		", " + args.join(", ")
+	}
+
+	cg.add_include("<stdio.h>")
+	return "printf(\"${format}\"${args_list})"
+}
+
+// ============= 필드 접근 생성 =============
+
+fn (mut cg: CodeGenerator) generate_field_access(object: string, field: string) string {
+	return "${object}.${field}"
+}
+
+fn (mut cg: CodeGenerator) generate_pointer_field_access(object: string, field: string) string {
+	return "${object}->${field}"
+}
+
+// ============= main 함수 생성 =============
+
+fn (mut cg: CodeGenerator) generate_main_function(body: string) {
+	cg.emit_line("int main() {")
+	cg.push_indent()
+	cg.emit(body)
+	cg.emit_line("return 0;")
+	cg.pop_indent()
+	cg.emit_line("}")
+	cg.emit_blank_line()
+}
+
+// ============= 전체 프로그램 생성 =============
+
+fn (mut cg: CodeGenerator) generate_program(
+	function_defs: []string,
+	main_body: string
+) string {
+	// 헤더 생성
+	cg.generate_headers()
+
+	// 함수 선언 생성
+	cg.generate_function_declarations()
+
+	// 함수 정의 생성
+	for func_def in function_defs {
+		cg.emit(func_def)
+	}
+
+	// main 함수 생성
+	cg.generate_main_function(main_body)
+
+	return cg.output
+}
+
+// ============= 고급 기능: 메모리 관리 =============
+
+fn (mut cg: CodeGenerator) generate_malloc(type_name: string, size: string) string {
+	cg.add_include("<stdlib.h>")
+	return "(${type_name}*)malloc(${size})"
+}
+
+fn (mut cg: CodeGenerator) generate_free(pointer: string) {
+	cg.emit_line("free(${pointer});")
+}
+
+// ============= 고급 기능: 포인터 =============
+
+fn (mut cg: CodeGenerator) generate_pointer_declaration(name: string, base_type: string) {
+	let c_type = cg.type_to_c_with_includes(base_type)
+	cg.emit_line("${c_type}* ${name};")
+}
+
+fn (mut cg: CodeGenerator) generate_address_of(variable: string) string {
+	return "&${variable}"
+}
+
+fn (mut cg: CodeGenerator) generate_dereference(pointer: string) string {
+	return "*${pointer}"
+}
+
+// ============= 고급 기능: 캐스트 =============
+
+fn (mut cg: CodeGenerator) generate_cast(value: string, target_type: string) string {
+	let c_type = type_to_c(target_type)
+	return "(${c_type})${value}"
+}
+
+// ============= 최적화 옵션 =============
+
+fn (mut cg: CodeGenerator) enable_optimization() {
+	// 컴파일 플래그 주석으로 추가
+	cg.emit_line("// Compile with: gcc -O2 -Wall -std=c99")
+}
+
+// ============= 에러 처리 =============
+
+fn (mut cg: CodeGenerator) add_error(message: string) {
+	cg.errors.push(message)
+}
+
+fn (mut cg: CodeGenerator) has_errors() bool {
+	return cg.errors.len() > 0
+}
+
+fn (mut cg: CodeGenerator) get_errors() []string {
+	return cg.errors
+}
+
+// ============= 최종 코드 반환 =============
+
+fn (cg: CodeGenerator) get_output() string {
+	return cg.output
+}
+
+fn (cg: CodeGenerator) get_code() string {
+	return cg.output
+}
+
+// ============= 유틸리티: 안전한 문자열 =============
+
+fn escape_c_string(s: string) string {
+	let mut result = ""
+	for i in 0..s.len() {
+		let c = s[i]
+		match c {
+			'\\' => result += "\\\\"
+			'"' => result += "\\\""
+			'\n' => result += "\\n"
+			'\t' => result += "\\t"
+			'\r' => result += "\\r"
+			_ => result += c.to_string()
+		}
+	}
+	return result
+}
+
+// ============= 복합 표현식 =============
+
+fn (mut cg: CodeGenerator) generate_ternary(condition: string, true_val: string, false_val: string) string {
+	return "(${condition}) ? (${true_val}) : (${false_val})"
+}
+
+fn (mut cg: CodeGenerator) generate_switch_statement(value: string, cases: map[string]string) {
+	cg.emit_line("switch (${value}) {")
+	cg.push_indent()
+
+	for case_val, case_body in cases {
+		cg.emit_line("case ${case_val}:")
+		cg.push_indent()
+		cg.emit(case_body)
+		cg.emit_line("break;")
+		cg.pop_indent()
+	}
+
+	cg.emit_line("default:")
+	cg.push_indent()
+	cg.emit_line("break;")
+	cg.pop_indent()
+
+	cg.pop_indent()
+	cg.emit_line("}")
+}
+
+// ============= 표준 라이브러리 함수 =============
+
+fn (mut cg: CodeGenerator) generate_strlen_call(str_var: string) string {
+	cg.add_include("<string.h>")
+	return "strlen(${str_var})"
+}
+
+fn (mut cg: CodeGenerator) generate_strcmp_call(str1: string, str2: string) string {
+	cg.add_include("<string.h>")
+	return "strcmp(${str1}, ${str2})"
+}
+
+fn (mut cg: CodeGenerator) generate_strcpy_call(dest: string, src: string) {
+	cg.add_include("<string.h>")
+	cg.emit_line("strcpy(${dest}, ${src});")
+}
+
+fn (mut cg: CodeGenerator) generate_memset_call(ptr: string, value: string, size: string) {
+	cg.add_include("<string.h>")
+	cg.emit_line("memset(${ptr}, ${value}, ${size});")
+}
+
+// ============= 댓글 생성 =============
+
+fn (mut cg: CodeGenerator) generate_comment(text: string) {
+	cg.emit_line("// ${text}")
+}
+
+fn (mut cg: CodeGenerator) generate_block_comment(lines: []string) {
+	cg.emit_line("/*")
+	for line in lines {
+		cg.emit_line(" * ${line}")
+	}
+	cg.emit_line(" */")
+}

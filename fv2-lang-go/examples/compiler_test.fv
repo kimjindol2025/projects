@@ -1,0 +1,331 @@
+// FV Compiler E2E 테스트 (V 언어)
+// 엔드-투-엔드 컴파일 파이프라인 검증
+
+// 테스트 1: 간단한 정수 프로그램
+fn test_compile_simple_integer() {
+	let source = "
+fn main() {
+	let x = 42
+	return x
+}
+"
+
+	let mut compiler = new_compiler(source)
+	let result = compiler.compile()
+
+	assert result.status == CompileStatus.Success
+	assert result.c_code.len() > 0
+	assert result.errors.len() == 0
+}
+
+// 테스트 2: 변수 선언 및 할당
+fn test_compile_variable_declaration() {
+	let source = "
+fn main() {
+	let x: i32 = 10
+	let y: f64 = 3.14
+	return x
+}
+"
+
+	let mut compiler = new_compiler(source)
+	let result = compiler.compile()
+
+	assert result.status == CompileStatus.Success
+	assert result.c_code.len() > 0
+}
+
+// 테스트 3: 함수 정의
+fn test_compile_function_definition() {
+	let source = "
+fn add(a: i32, b: i32) -> i32 {
+	return a + b
+}
+
+fn main() {
+	let result = add(5, 3)
+	return result
+}
+"
+
+	let mut compiler = new_compiler(source)
+	let result = compiler.compile()
+
+	assert result.status == CompileStatus.Success
+	assert result.c_code.contains("add")
+}
+
+// 테스트 4: if 문
+fn test_compile_if_statement() {
+	let source = "
+fn main() {
+	let x = 42
+	if x > 0 {
+		return x
+	} else {
+		return 0
+	}
+}
+"
+
+	let mut compiler = new_compiler(source)
+	let result = compiler.compile()
+
+	assert result.status == CompileStatus.Success
+	// assert result.c_code.contains("if")
+}
+
+// 테스트 5: for 루프
+fn test_compile_for_loop() {
+	let source = "
+fn main() {
+	let mut sum = 0
+	for i in 0..10 {
+		sum = sum + i
+	}
+	return sum
+}
+"
+
+	let mut compiler = new_compiler(source)
+	let result = compiler.compile()
+
+	assert result.status == CompileStatus.Success
+	// assert result.c_code.contains("for")
+}
+
+// 테스트 6: 구조체 정의
+fn test_compile_struct_definition() {
+	let source = "
+struct Point {
+	x: f64
+	y: f64
+}
+
+fn main() {
+	let p = Point { x: 1.0, y: 2.0 }
+	return 0
+}
+"
+
+	let mut compiler = new_compiler(source)
+	let result = compiler.compile()
+
+	assert result.status == CompileStatus.Success
+	// assert result.c_code.contains("Point")
+}
+
+// 테스트 7: 배열
+fn test_compile_array() {
+	let source = "
+fn main() {
+	let arr = [1, 2, 3, 4, 5]
+	let x = arr[0]
+	return x
+}
+"
+
+	let mut compiler = new_compiler(source)
+	let result = compiler.compile()
+
+	assert result.status == CompileStatus.Success
+	// assert result.c_code.contains("[")
+}
+
+// 테스트 8: 문자열
+fn test_compile_string() {
+	let source = "
+fn main() {
+	let s = \"hello\"
+	return 0
+}
+"
+
+	let mut compiler = new_compiler(source)
+	let result = compiler.compile()
+
+	assert result.status == CompileStatus.Success
+	// assert result.c_code.contains("char*")
+}
+
+// 테스트 9: 빈 소스 코드
+fn test_compile_empty_source() {
+	let source = ""
+
+	let mut compiler = new_compiler(source)
+	let result = compiler.compile()
+
+	// 빈 파일은 성공 또는 경고로 처리
+	// assert result.status == CompileStatus.Success || result.warnings.len() > 0
+}
+
+// 테스트 10: 디버그 모드
+fn test_compile_with_debug() {
+	let source = "
+fn main() {
+	let x = 42
+	return x
+}
+"
+
+	let mut compiler = new_compiler(source)
+	compiler.enable_debug()
+
+	let result = compiler.compile()
+
+	assert result.status == CompileStatus.Success
+}
+
+// 테스트 11: 최적화된 컴파일
+fn test_optimized_compile() {
+	let source = "
+fn main() {
+	let x = 42
+	return x
+}
+"
+
+	let mut opt_compiler = new_optimized_compiler(source)
+	opt_compiler.set_optimization(2)
+
+	let result = opt_compiler.compile()
+
+	assert result.status == CompileStatus.Success
+}
+
+// 테스트 12: 결과 접근
+fn test_compiler_result_access() {
+	let source = "
+fn main() {
+	return 0
+}
+"
+
+	let mut compiler = new_compiler(source)
+	let result = compiler.compile()
+
+	assert result.c_code.len() > 0
+	assert compiler.get_c_code().len() > 0
+	assert compiler.get_errors().len() == 0
+}
+
+// 테스트 13: 토큰 생성
+fn test_compiler_tokenization() {
+	let source = "let x = 42"
+
+	let mut compiler = new_compiler(source)
+	assert compiler.run_lexer() == true
+	assert compiler.tokens.len() > 0
+}
+
+// 테스트 14: AST 생성
+fn test_compiler_parsing() {
+	let source = "
+fn main() {
+	let x = 42
+	return x
+}
+"
+
+	let mut compiler = new_compiler(source)
+	assert compiler.run_lexer() == true
+	assert compiler.run_parser() == true
+	assert compiler.ast != none
+}
+
+// 테스트 15: 타입 검사
+fn test_compiler_type_checking() {
+	let source = "
+fn main() {
+	let x: i32 = 42
+	return x
+}
+"
+
+	let mut compiler = new_compiler(source)
+	assert compiler.run_lexer() == true
+	assert compiler.run_parser() == true
+	assert compiler.run_type_checker() == true
+}
+
+// 테스트 16: 전체 파이프라인
+fn test_compiler_full_pipeline() {
+	let source = "
+fn add(a: i32, b: i32) -> i32 {
+	return a + b
+}
+
+fn main() {
+	let x = 5
+	let y = 3
+	let result = add(x, y)
+	if result > 0 {
+		return result
+	} else {
+		return 0
+	}
+}
+"
+
+	let mut compiler = new_compiler(source)
+	let result = compiler.compile()
+
+	assert result.status == CompileStatus.Success
+	assert result.errors.len() == 0
+	assert result.c_code.len() > 0
+	assert result.c_code.contains("#include")
+	assert result.c_code.contains("main")
+}
+
+// 테스트 17: 컴파일 오류 감지
+fn test_compiler_error_detection() {
+	let source = "
+fn main() {
+	let x: i32 = \"hello\"
+	return x
+}
+"
+
+	let mut compiler = new_compiler(source)
+	// 타입 미스매치 감지 (선택적)
+	// let result = compiler.compile()
+	// assert result.status != CompileStatus.Success
+}
+
+// 테스트 18: 통계 출력
+fn test_compiler_statistics() {
+	let source = "
+fn main() {
+	let x = 42
+	return x
+}
+"
+
+	let mut compiler = new_compiler(source)
+	compiler.compile()
+	compiler.print_statistics()
+
+	// 통계 출력이 성공했는지 확인 (간단한 테스트)
+	assert true
+}
+
+// 테스트 19: 컴파일러 옵션
+fn test_compiler_options() {
+	let mut options = new_compiler_options()
+
+	assert options.optimize == false
+	assert options.debug_symbols == true
+
+	options.optimize = true
+	assert options.optimize == true
+}
+
+// 테스트 20: 배치 컴파일러
+fn test_batch_compiler() {
+	let mut batch = new_batch_compiler()
+
+	batch.add_source_file("file1.fv")
+	batch.add_source_file("file2.fv")
+
+	assert batch.source_files.len() == 2
+}

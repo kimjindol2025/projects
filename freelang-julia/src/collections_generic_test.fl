@@ -1,0 +1,374 @@
+# ==========================================
+# Phase G Task G.2: Generic Collections 테스트
+# (모든 타입을 지원하는 Collections)
+# ==========================================
+
+# ==========================================
+# Dictionary[String, String] 테스트
+# ==========================================
+
+# Test 1: DictionaryStrStr 생성
+function test_dict_str_str_new(): Bool =
+  let dict = new_dict_str_str()
+  dict.size == 0
+
+# Test 2: DictionaryStrStr 설정 & 조회
+function test_dict_str_str_set_get(): Bool =
+  let dict = new_dict_str_str()
+  dict_str_str_set(dict, "key1", "value1")
+
+  match dict_str_str_get(dict, "key1") {
+    Some(v) -> v == "value1",
+    None -> false
+  }
+
+# Test 3: DictionaryStrStr 키 존재 확인
+function test_dict_str_str_contains(): Bool =
+  let dict = new_dict_str_str()
+  dict_str_str_set(dict, "key1", "value1")
+  dict_str_str_contains(dict, "key1")
+
+# Test 4: DictionaryStrStr 제거
+function test_dict_str_str_remove(): Bool =
+  let dict = new_dict_str_str()
+  dict_str_str_set(dict, "key1", "value1")
+
+  match dict_str_str_remove(dict, "key1") {
+    Some(v) -> v == "value1" && dict.size == 0,
+    None -> false
+  }
+
+# Test 5: DictionaryStrStr 키 목록
+function test_dict_str_str_keys(): Bool =
+  let dict = new_dict_str_str()
+  dict_str_str_set(dict, "a", "1")
+  dict_str_str_set(dict, "b", "2")
+
+  let keys = dict_str_str_keys(dict)
+  keys.length() == 2
+
+# Test 6: DictionaryStrStr 값 목록
+function test_dict_str_str_values(): Bool =
+  let dict = new_dict_str_str()
+  dict_str_str_set(dict, "a", "1")
+  dict_str_str_set(dict, "b", "2")
+
+  let values = dict_str_str_values(dict)
+  values.length() == 2
+
+# ==========================================
+# Dictionary[String, Int] 테스트
+# ==========================================
+
+# Test 7: DictionaryStrInt 생성
+function test_dict_str_int_new(): Bool =
+  let dict = new_dict_str_int()
+  dict.size == 0
+
+# Test 8: DictionaryStrInt 설정 & 조회
+function test_dict_str_int_set_get(): Bool =
+  let dict = new_dict_str_int()
+  dict_str_int_set(dict, "count", 42)
+
+  match dict_str_int_get(dict, "count") {
+    Some(v) -> v == 42,
+    None -> false
+  }
+
+# Test 9: DictionaryStrInt 키 존재 확인
+function test_dict_str_int_contains(): Bool =
+  let dict = new_dict_str_int()
+  dict_str_int_set(dict, "score", 100)
+  dict_str_int_contains(dict, "score")
+
+# Test 10: DictionaryStrInt 제거
+function test_dict_str_int_remove(): Bool =
+  let dict = new_dict_str_int()
+  dict_str_int_set(dict, "age", 25)
+
+  match dict_str_int_remove(dict, "age") {
+    Some(v) -> v == 25 && dict.size == 0,
+    None -> false
+  }
+
+# ==========================================
+# Set[String] 테스트
+# ==========================================
+
+# Test 11: SetStr 생성
+function test_set_str_new(): Bool =
+  let set = new_set_str()
+  set.size == 0
+
+# Test 12: SetStr 원소 추가
+function test_set_str_add(): Bool =
+  let set = new_set_str()
+  set_str_add(set, "a")
+  set_str_add(set, "b")
+  set.size == 2
+
+# Test 13: SetStr 원소 존재 확인
+function test_set_str_contains(): Bool =
+  let set = new_set_str()
+  set_str_add(set, "apple")
+  set_str_contains(set, "apple")
+
+# Test 14: SetStr 합집합
+function test_set_str_union(): Bool =
+  let set1 = new_set_str()
+  let set2 = new_set_str()
+
+  set_str_add(set1, "a")
+  set_str_add(set2, "b")
+
+  let result = set_str_union(set1, set2)
+  result.size == 2
+
+# Test 15: SetStr 교집합
+function test_set_str_intersection(): Bool =
+  let set1 = new_set_str()
+  let set2 = new_set_str()
+
+  set_str_add(set1, "a")
+  set_str_add(set1, "b")
+  set_str_add(set2, "b")
+
+  let result = set_str_intersection(set1, set2)
+  result.size == 1
+
+# Test 16: SetStr 차집합
+function test_set_str_difference(): Bool =
+  let set1 = new_set_str()
+  let set2 = new_set_str()
+
+  set_str_add(set1, "a")
+  set_str_add(set1, "b")
+  set_str_add(set2, "b")
+
+  let result = set_str_difference(set1, set2)
+  result.size == 1
+
+# ==========================================
+# Set[Int] 테스트
+# ==========================================
+
+# Test 17: SetInt 생성
+function test_set_int_new(): Bool =
+  let set = new_set_int()
+  set.size == 0
+
+# Test 18: SetInt 원소 추가
+function test_set_int_add(): Bool =
+  let set = new_set_int()
+  set_int_add(set, 1)
+  set_int_add(set, 2)
+  set.size == 2
+
+# Test 19: SetInt 원소 존재 확인
+function test_set_int_contains(): Bool =
+  let set = new_set_int()
+  set_int_add(set, 42)
+  set_int_contains(set, 42)
+
+# Test 20: SetInt 중복 추가 방지
+function test_set_int_no_duplicates(): Bool =
+  let set = new_set_int()
+  set_int_add(set, 5)
+  set_int_add(set, 5)
+  set.size == 1
+
+# ==========================================
+# Array[String] 유틸리티 테스트
+# ==========================================
+
+# Test 21: Array[String] 정렬
+function test_array_str_sort(): Bool =
+  let arr = Array[String]()
+  arr.push("c")
+  arr.push("a")
+  arr.push("b")
+
+  let sorted = array_str_sort(arr)
+  sorted.length() == 3
+
+# Test 22: Array[String] 역순
+function test_array_str_reverse(): Bool =
+  let arr = Array[String]()
+  arr.push("a")
+  arr.push("b")
+  arr.push("c")
+
+  let reversed = array_str_reverse(arr)
+  reversed.length() == 3
+
+# Test 23: Array[String] 조인
+function test_array_str_join(): Bool =
+  let arr = Array[String]()
+  arr.push("Hello")
+  arr.push("World")
+
+  let joined = array_str_join(arr, " ")
+  joined == "Hello World"
+
+# Test 24: Array[String] 연결
+function test_array_str_concat(): Bool =
+  let arr1 = Array[String]()
+  let arr2 = Array[String]()
+
+  arr1.push("a")
+  arr2.push("b")
+
+  let result = array_str_concat(arr1, arr2)
+  result.length() == 2
+
+# ==========================================
+# Array[Int] 유틸리티 테스트
+# ==========================================
+
+# Test 25: Array[Int] 정렬
+function test_array_int_sort(): Bool =
+  let arr = Array[Int]()
+  arr.push(3)
+  arr.push(1)
+  arr.push(2)
+
+  let sorted = array_int_sort(arr)
+  sorted.length() == 3
+
+# Test 26: Array[Int] 합계
+function test_array_int_sum(): Bool =
+  let arr = Array[Int]()
+  arr.push(1)
+  arr.push(2)
+  arr.push(3)
+
+  let sum = array_int_sum(arr)
+  sum == 6
+
+# Test 27: Array[Int] 최대값
+function test_array_int_max(): Bool =
+  let arr = Array[Int]()
+  arr.push(1)
+  arr.push(5)
+  arr.push(3)
+
+  match array_int_max(arr) {
+    Some(v) -> v == 5,
+    None -> false
+  }
+
+# Test 28: Array[Int] 최소값
+function test_array_int_min(): Bool =
+  let arr = Array[Int]()
+  arr.push(1)
+  arr.push(5)
+  arr.push(3)
+
+  match array_int_min(arr) {
+    Some(v) -> v == 1,
+    None -> false
+  }
+
+# Test 29: Array[Int] 연결
+function test_array_int_concat(): Bool =
+  let arr1 = Array[Int]()
+  let arr2 = Array[Int]()
+
+  arr1.push(1)
+  arr2.push(2)
+
+  let result = array_int_concat(arr1, arr2)
+  result.length() == 2
+
+# ==========================================
+# 레거시 호환성 테스트
+# ==========================================
+
+# Test 30: 레거시 new_dict()
+function test_legacy_new_dict(): Bool =
+  let dict = new_dict()
+  dict.size == 0
+
+# Test 31: 레거시 dict_set/get
+function test_legacy_dict_set_get(): Bool =
+  let dict = new_dict()
+  dict_set(dict, "key", "value")
+
+  match dict_get(dict, "key") {
+    Some(v) -> v == "value",
+    None -> false
+  }
+
+# Test 32: 레거시 new_set()
+function test_legacy_new_set(): Bool =
+  let set = new_set()
+  set.size == 0
+
+# Test 33: 레거시 set_add/contains
+function test_legacy_set_add_contains(): Bool =
+  let set = new_set()
+  set_add(set, "element")
+  set_contains(set, "element")
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_dict_str_str_new", test_dict_str_str_new()),
+    ("test_dict_str_str_set_get", test_dict_str_str_set_get()),
+    ("test_dict_str_str_contains", test_dict_str_str_contains()),
+    ("test_dict_str_str_remove", test_dict_str_str_remove()),
+    ("test_dict_str_str_keys", test_dict_str_str_keys()),
+    ("test_dict_str_str_values", test_dict_str_str_values()),
+    ("test_dict_str_int_new", test_dict_str_int_new()),
+    ("test_dict_str_int_set_get", test_dict_str_int_set_get()),
+    ("test_dict_str_int_contains", test_dict_str_int_contains()),
+    ("test_dict_str_int_remove", test_dict_str_int_remove()),
+    ("test_set_str_new", test_set_str_new()),
+    ("test_set_str_add", test_set_str_add()),
+    ("test_set_str_contains", test_set_str_contains()),
+    ("test_set_str_union", test_set_str_union()),
+    ("test_set_str_intersection", test_set_str_intersection()),
+    ("test_set_str_difference", test_set_str_difference()),
+    ("test_set_int_new", test_set_int_new()),
+    ("test_set_int_add", test_set_int_add()),
+    ("test_set_int_contains", test_set_int_contains()),
+    ("test_set_int_no_duplicates", test_set_int_no_duplicates()),
+    ("test_array_str_sort", test_array_str_sort()),
+    ("test_array_str_reverse", test_array_str_reverse()),
+    ("test_array_str_join", test_array_str_join()),
+    ("test_array_str_concat", test_array_str_concat()),
+    ("test_array_int_sort", test_array_int_sort()),
+    ("test_array_int_sum", test_array_int_sum()),
+    ("test_array_int_max", test_array_int_max()),
+    ("test_array_int_min", test_array_int_min()),
+    ("test_array_int_concat", test_array_int_concat()),
+    ("test_legacy_new_dict", test_legacy_new_dict()),
+    ("test_legacy_dict_set_get", test_legacy_dict_set_get()),
+    ("test_legacy_new_set", test_legacy_new_set()),
+    ("test_legacy_set_add_contains", test_legacy_set_add_contains())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Generic Collections Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("Success Rate: " + (passed * 100 / (passed + failed)).to_string() + "%")
+  println("==========================================")
+

@@ -1,0 +1,278 @@
+# ==========================================
+# Phase G Task G.1: Virtual File System (VFS)
+# (메모리 기반 파일 시스템 - 테스트용)
+# ==========================================
+# FreeJulia 자체 실행을 위한 가상 파일 시스템
+# 실제 OS 연동은 Go FFI로 나중에 구현
+
+# ==========================================
+# 전역 상태: 가상 파일 저장소
+# ==========================================
+
+# 메모리에 저장된 파일들
+global_vfs_files: Dictionary[String, String] = new_dict()
+global_vfs_metadata: Dictionary[String, FileInfo] = new_dict()
+global_vfs_initialized: Bool = false
+
+# ==========================================
+# VFS 초기화
+# ==========================================
+
+function init_vfs(): Void =
+  if global_vfs_initialized then
+    return
+  end
+
+  # 시스템 파일 등록
+  register_vfs_file("/proc/version", "FreeJulia Virtual File System v1.0\n")
+  register_vfs_file("/etc/hostname", "freejulia\n")
+  register_vfs_file("/dev/null", "")
+
+  global_vfs_initialized = true
+
+# ==========================================
+# VFS 파일 등록/관리
+# ==========================================
+
+# 파일을 VFS에 등록
+function register_vfs_file(path: String, contents: String): Void =
+  init_vfs()
+  dict_set(global_vfs_files, path, contents)
+
+  # 메타데이터 생성
+  dict_set(global_vfs_metadata, path, FileInfo {
+    path: path,
+    size: contents.length(),
+    exists: true,
+    is_directory: false,
+    is_readable: true,
+    is_writable: true,
+    created_time: 0,
+    modified_time: 0
+  })
+
+# VFS에서 파일 제거
+function unregister_vfs_file(path: String): Bool =
+  init_vfs()
+  match dict_remove(global_vfs_files, path) {
+    Some(_) -> {
+      dict_remove(global_vfs_metadata, path)
+      true
+    },
+    None -> false
+  }
+
+# VFS 초기화 (모든 파일 삭제)
+function clear_vfs(): Void =
+  dict_clear(global_vfs_files)
+  dict_clear(global_vfs_metadata)
+  global_vfs_initialized = false
+
+# ==========================================
+# VFS 파일 존재 확인
+# ==========================================
+
+function vfs_file_exists(path: String): Bool =
+  init_vfs()
+
+  if path.length() == 0 then
+    return false
+  end
+
+  if path.contains("..") || path.contains("//") then
+    return false
+  end
+
+  dict_contains(global_vfs_files, path)
+
+# ==========================================
+# VFS 파일 읽기
+# ==========================================
+
+function vfs_read_file(path: String): Result[String, FileError] =
+  init_vfs()
+
+  if path.length() == 0 then
+    return Err(FileError {
+      code: "INVALID_PATH",
+      message: "Path cannot be empty",
+      path: path
+    })
+  end
+
+  if path.contains("..") then
+    return Err(FileError {
+      code: "INVALID_PATH",
+      message: "Path traversal not allowed",
+      path: path
+    })
+  end
+
+  if not vfs_file_exists(path) then
+    return Err(FileError {
+      code: "NOT_FOUND",
+      message: "File not found",
+      path: path
+    })
+  end
+
+  match dict_get(global_vfs_files, path) {
+    Some(contents) -> Ok(contents),
+    None -> Err(FileError {
+      code: "NOT_FOUND",
+      message: "File not found",
+      path: path
+    })
+  }
+
+# ==========================================
+# VFS 파일 쓰기
+# ==========================================
+
+function vfs_write_file(path: String, contents: String): Result[Int, FileError] =
+  init_vfs()
+
+  if path.length() == 0 then
+    return Err(FileError {
+      code: "INVALID_PATH",
+      message: "Path cannot be empty",
+      path: path
+    })
+  end
+
+  if path.contains("//") || path.contains("..") then
+    return Err(FileError {
+      code: "INVALID_PATH",
+      message: "Invalid path format",
+      path: path
+    })
+  end
+
+  # VFS에 파일 등록
+  register_vfs_file(path, contents)
+  Ok(contents.length())
+
+# ==========================================
+# VFS 파일 추가 쓰기
+# ==========================================
+
+function vfs_append_file(path: String, contents: String): Result[Int, FileError] =
+  init_vfs()
+
+  if path.length() == 0 then
+    return Err(FileError {
+      code: "INVALID_PATH",
+      message: "Path cannot be empty",
+      path: path
+    })
+  end
+
+  match vfs_read_file(path) {
+    Ok(existing) -> {
+      let combined = existing + contents
+      vfs_write_file(path, combined)
+    },
+    Err(_) -> {
+      # 파일이 없으면 새로 생성
+      vfs_write_file(path, contents)
+    }
+  }
+
+# ==========================================
+# VFS 파일 정보 조회
+# ==========================================
+
+function vfs_get_file_info(path: String): Result[FileInfo, FileError] =
+  init_vfs()
+
+  if path.length() == 0 then
+    return Err(FileError {
+      code: "INVALID_PATH",
+      message: "Path cannot be empty",
+      path: path
+    })
+  end
+
+  if not vfs_file_exists(path) then
+    return Err(FileError {
+      code: "NOT_FOUND",
+      message: "File not found",
+      path: path
+    })
+  end
+
+  match dict_get(global_vfs_metadata, path) {
+    Some(info) -> Ok(info),
+    None -> Err(FileError {
+      code: "NOT_FOUND",
+      message: "Metadata not found",
+      path: path
+    })
+  }
+
+# ==========================================
+# VFS 파일 복사
+# ==========================================
+
+function vfs_copy_file(source: String, dest: String): Result[Bool, FileError] =
+  if source.length() == 0 || dest.length() == 0 then
+    return Err(FileError {
+      code: "INVALID_PATH",
+      message: "Source and destination cannot be empty",
+      path: source
+    })
+  end
+
+  match vfs_read_file(source) {
+    Ok(contents) -> {
+      match vfs_write_file(dest, contents) {
+        Ok(_) -> Ok(true),
+        Err(e) -> Err(e)
+      }
+    },
+    Err(e) -> Err(e)
+  }
+
+# ==========================================
+# VFS 파일 삭제
+# ==========================================
+
+function vfs_delete_file(path: String): Result[Bool, FileError] =
+  init_vfs()
+
+  if path.length() == 0 then
+    return Err(FileError {
+      code: "INVALID_PATH",
+      message: "Path cannot be empty",
+      path: path
+    })
+  end
+
+  if not vfs_file_exists(path) then
+    return Err(FileError {
+      code: "NOT_FOUND",
+      message: "File not found",
+      path: path
+    })
+  end
+
+  if unregister_vfs_file(path) then
+    Ok(true)
+  else
+    Err(FileError {
+      code: "IO_ERROR",
+      message: "Failed to delete file",
+      path: path
+    })
+  end
+
+# ==========================================
+# VFS 상태 조회
+# ==========================================
+
+function vfs_file_count(): Int =
+  global_vfs_files.size
+
+function vfs_list_files(): Array[String] =
+  dict_keys(global_vfs_files)
+

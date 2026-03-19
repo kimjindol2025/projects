@@ -1,0 +1,115 @@
+# ==========================================
+# Phase E Task E.2: Benchmarking Framework 테스트
+# (10개 테스트 케이스)
+# ==========================================
+
+# Test 1: 타이머 생성
+function test_timer_creation(): Bool =
+  let timer = start_timer()
+  timer.start_time == 0
+
+# Test 2: 메모리 트래커 생성
+function test_memory_tracker_creation(): Bool =
+  let tracker = new_memory_tracker()
+  tracker.allocations == 0 && tracker.deallocations == 0
+
+# Test 3: 메모리 델타 계산
+function test_memory_delta(): Bool =
+  let tracker = new_memory_tracker()
+  tracker.initial_usage = 10.0
+  tracker.final_usage = 15.0
+  let delta = get_memory_delta(tracker)
+  delta == 5.0
+
+# Test 4: Lexer 벤치마크
+function test_benchmark_lexer(): Bool =
+  let source = "let x = 42"
+  let result = benchmark_lexer(source, 0)
+  result.test_name == "Lexer" && result.success
+
+# Test 5: Parser 벤치마크
+function test_benchmark_parser(): Bool =
+  let tokens = Array[Token]()
+  let result = benchmark_parser(tokens, 0)
+  result.test_name == "Parser"
+
+# Test 6: Type Checker 벤치마크
+function test_benchmark_type_checker(): Bool =
+  let ast = make_node("program", "", "")
+  let result = benchmark_type_checker(ast, 0)
+  result.test_name == "Type Checker"
+
+# Test 7: Code Generator 벤치마크
+function test_benchmark_code_generator(): Bool =
+  let ir = IRModule {
+    functions: [],
+    globals: []
+  }
+  let result = benchmark_code_generator(ir, 0)
+  result.test_name == "Code Generator"
+
+# Test 8: Optimizer 벤치마크
+function test_benchmark_optimizer(): Bool =
+  let ir = IRModule {
+    functions: [],
+    globals: []
+  }
+  let result = benchmark_optimizer(ir)
+  result.test_name == "Optimizer"
+
+# Test 9: 벤치마크 스위트 생성
+function test_benchmark_suite_creation(): Bool =
+  let suite = new_benchmark_suite()
+  suite.total_tests == 0 && suite.passed_tests == 0
+
+# Test 10: 벤치마크 결과 추가
+function test_add_result_to_suite(): Bool =
+  let suite = new_benchmark_suite()
+  let result = BenchmarkResult {
+    test_name: "Test",
+    duration_ms: 1.5,
+    memory_used_mb: 0.5,
+    instructions_executed: 10,
+    optimization_level: 0,
+    success: true
+  }
+  add_result(suite, result)
+  suite.total_tests == 1 && suite.passed_tests == 1
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_timer_creation", test_timer_creation()),
+    ("test_memory_tracker_creation", test_memory_tracker_creation()),
+    ("test_memory_delta", test_memory_delta()),
+    ("test_benchmark_lexer", test_benchmark_lexer()),
+    ("test_benchmark_parser", test_benchmark_parser()),
+    ("test_benchmark_type_checker", test_benchmark_type_checker()),
+    ("test_benchmark_code_generator", test_benchmark_code_generator()),
+    ("test_benchmark_optimizer", test_benchmark_optimizer()),
+    ("test_benchmark_suite_creation", test_benchmark_suite_creation()),
+    ("test_add_result_to_suite", test_add_result_to_suite())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Benchmarking Framework Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")

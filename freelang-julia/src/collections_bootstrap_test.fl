@@ -1,0 +1,195 @@
+# ==========================================
+# Phase F Task F.2: Collections Library 테스트
+# (18개 테스트 케이스)
+# ==========================================
+
+# Dictionary 테스트
+
+# Test 1: Dictionary 생성
+function test_new_dict(): Bool =
+  let dict = new_dict()
+  dict.size == 0
+
+# Test 2: Dictionary에 값 설정
+function test_dict_set(): Bool =
+  let dict = new_dict()
+  dict_set(dict, "key1", "value1")
+  dict.size == 1
+
+# Test 3: Dictionary에서 값 조회
+function test_dict_get(): Bool =
+  let dict = new_dict()
+  dict_set(dict, "key1", "value1")
+  match dict_get(dict, "key1") {
+    Some(v) -> v == "value1",
+    None -> false
+  }
+
+# Test 4: Dictionary 키 존재 여부 확인
+function test_dict_contains(): Bool =
+  let dict = new_dict()
+  dict_set(dict, "key1", "value1")
+  dict_contains(dict, "key1")
+
+# Test 5: Dictionary 값 제거
+function test_dict_remove(): Bool =
+  let dict = new_dict()
+  dict_set(dict, "key1", "value1")
+  match dict_remove(dict, "key1") {
+    Some(v) -> v == "value1",
+    None -> false
+  }
+
+# Test 6: Dictionary 모든 키 반환
+function test_dict_keys(): Bool =
+  let dict = new_dict()
+  dict_set(dict, "key1", "value1")
+  dict_set(dict, "key2", "value2")
+  let keys = dict_keys(dict)
+  keys.length() == 2
+
+# Test 7: Dictionary 모든 값 반환
+function test_dict_values(): Bool =
+  let dict = new_dict()
+  dict_set(dict, "key1", "value1")
+  dict_set(dict, "key2", "value2")
+  let values = dict_values(dict)
+  values.length() == 2
+
+# Set 테스트
+
+# Test 8: Set 생성
+function test_new_set(): Bool =
+  let set = new_set()
+  set.size == 0
+
+# Test 9: Set에 원소 추가
+function test_set_add(): Bool =
+  let set = new_set()
+  set_add(set, "element1")
+  set.size == 1
+
+# Test 10: Set 원소 존재 여부 확인
+function test_set_contains(): Bool =
+  let set = new_set()
+  set_add(set, "element1")
+  set_contains(set, "element1")
+
+# Test 11: Set 원소 제거
+function test_set_remove(): Bool =
+  let set = new_set()
+  set_add(set, "element1")
+  set_remove(set, "element1") && set.size == 0
+
+# Test 12: Set 합집합
+function test_set_union(): Bool =
+  let set1 = new_set()
+  let set2 = new_set()
+  set_add(set1, "a")
+  set_add(set2, "b")
+  let result = set_union(set1, set2)
+  result.size == 2
+
+# Test 13: Set 교집합
+function test_set_intersection(): Bool =
+  let set1 = new_set()
+  let set2 = new_set()
+  set_add(set1, "a")
+  set_add(set1, "b")
+  set_add(set2, "b")
+  let result = set_intersection(set1, set2)
+  result.size == 1
+
+# Test 14: Set 차집합
+function test_set_difference(): Bool =
+  let set1 = new_set()
+  let set2 = new_set()
+  set_add(set1, "a")
+  set_add(set1, "b")
+  set_add(set2, "b")
+  let result = set_difference(set1, set2)
+  result.size == 1
+
+# Array 유틸리티 테스트
+
+# Test 15: Array 정렬
+function test_array_sort(): Bool =
+  let arr = Array[Int]()
+  arr.push(3)
+  arr.push(1)
+  arr.push(2)
+  let sorted = array_sort(arr)
+  sorted.length() == 3
+
+# Test 16: Array 역순
+function test_array_reverse(): Bool =
+  let arr = Array[Int]()
+  arr.push(1)
+  arr.push(2)
+  arr.push(3)
+  let reversed = array_reverse(arr)
+  reversed.length() == 3
+
+# Test 17: Array 연결
+function test_array_concat(): Bool =
+  let arr1 = Array[Int]()
+  let arr2 = Array[Int]()
+  arr1.push(1)
+  arr2.push(2)
+  let result = array_concat(arr1, arr2)
+  result.length() == 2
+
+# Test 18: Array 구간 추출
+function test_array_slice(): Bool =
+  let arr = Array[Int]()
+  arr.push(1)
+  arr.push(2)
+  arr.push(3)
+  let sliced = array_slice(arr, 0, 2)
+  sliced.length() == 2
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_new_dict", test_new_dict()),
+    ("test_dict_set", test_dict_set()),
+    ("test_dict_get", test_dict_get()),
+    ("test_dict_contains", test_dict_contains()),
+    ("test_dict_remove", test_dict_remove()),
+    ("test_dict_keys", test_dict_keys()),
+    ("test_dict_values", test_dict_values()),
+    ("test_new_set", test_new_set()),
+    ("test_set_add", test_set_add()),
+    ("test_set_contains", test_set_contains()),
+    ("test_set_remove", test_set_remove()),
+    ("test_set_union", test_set_union()),
+    ("test_set_intersection", test_set_intersection()),
+    ("test_set_difference", test_set_difference()),
+    ("test_array_sort", test_array_sort()),
+    ("test_array_reverse", test_array_reverse()),
+    ("test_array_concat", test_array_concat()),
+    ("test_array_slice", test_array_slice())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Collections Library Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")

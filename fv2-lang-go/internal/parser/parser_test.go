@@ -655,3 +655,79 @@ func TestParseIfExpressionAsValue(t *testing.T) {
 		t.Errorf("Expected both then and else expressions")
 	}
 }
+
+// TestParseErrorMissingClosingBrace tests error on missing closing brace
+func TestParseErrorMissingClosingBrace(t *testing.T) {
+	input := "fn main() { let x = 5;"
+	lex, _ := lexer.New(input)
+	tokens, _ := lex.Tokenize()
+	parser := New(tokens)
+	program, err := parser.Parse()
+
+	// Should have error but still return partial program
+	if err == nil {
+		t.Errorf("Expected parse error for missing closing brace")
+	}
+
+	// Parser should recover and return partial result
+	if program == nil {
+		t.Errorf("Expected partial program despite error")
+	}
+}
+
+// TestParseErrorMissingFunctionName tests error on missing function name
+func TestParseErrorMissingFunctionName(t *testing.T) {
+	input := "fn () { let x = 5; }"
+	lex, _ := lexer.New(input)
+	tokens, _ := lex.Tokenize()
+	parser := New(tokens)
+	_, err := parser.Parse()
+
+	// Should have error for missing function name
+	if err == nil {
+		t.Errorf("Expected parse error for missing function name")
+	}
+
+	// Parser should collect errors and continue
+	if len(parser.errors) == 0 {
+		t.Errorf("Expected parser to collect errors")
+	}
+}
+
+// TestParseErrorInvalidType tests error on invalid type annotation
+func TestParseErrorInvalidType(t *testing.T) {
+	input := "fn main() { let x: !invalid = 5; }"
+	lex, _ := lexer.New(input)
+	tokens, _ := lex.Tokenize()
+	parser := New(tokens)
+	program, _ := parser.Parse()
+
+	// Should handle invalid type gracefully
+	if program == nil {
+		t.Errorf("Expected parser to recover from invalid type")
+	}
+}
+
+// TestParseErrorMultipleErrors tests that parser collects multiple errors
+func TestParseErrorMultipleErrors(t *testing.T) {
+	input := "fn () { let x: = 5; } fn () { }"
+	lex, _ := lexer.New(input)
+	tokens, _ := lex.Tokenize()
+	parser := New(tokens)
+	program, err := parser.Parse()
+
+	// Should collect multiple errors
+	if err == nil {
+		t.Errorf("Expected parse errors")
+	}
+
+	// Parser should continue and collect both errors
+	if len(parser.errors) < 2 {
+		t.Errorf("Expected multiple errors, got %d", len(parser.errors))
+	}
+
+	// Should still return partial program
+	if program == nil {
+		t.Errorf("Expected partial program with multiple errors")
+	}
+}

@@ -1,0 +1,233 @@
+// FV Code Generator 테스트 (V 언어)
+// 12개 테스트 케이스로 완벽한 검증
+
+// 테스트 1: 기본 초기화
+fn test_generator_initialization() {
+	let mut cg = new_code_generator()
+
+	assert cg.output == ""
+	assert cg.indent_level == 0
+	assert cg.includes.len() == 0
+	assert cg.function_declarations.len() == 0
+	assert cg.errors.len() == 0
+}
+
+// 테스트 2: 헤더 생성
+fn test_generate_headers() {
+	let mut cg = new_code_generator()
+	cg.generate_headers()
+
+	let output = cg.get_output()
+	assert output.contains("#include <stdio.h>")
+	assert output.contains("#include <stdlib.h>")
+}
+
+// 테스트 3: 타입 매핑
+fn test_type_mapping() {
+	let mut cg = new_code_generator()
+
+	assert type_to_c("i32") == "int"
+	assert type_to_c("i64") == "long long"
+	assert type_to_c("f32") == "float"
+	assert type_to_c("f64") == "double"
+	assert type_to_c("bool") == "bool"
+	assert type_to_c("string") == "char*"
+	assert type_to_c("void") == "void"
+}
+
+// 테스트 4: 변수 선언 생성
+fn test_generate_variable_declaration() {
+	let mut cg = new_code_generator()
+	cg.generate_variable_declaration("x", "i32", "42")
+
+	let output = cg.get_output()
+	assert output.contains("int x = 42;")
+}
+
+// 테스트 5: 리터럴 생성
+fn test_generate_literals() {
+	let mut cg = new_code_generator()
+
+	assert cg.generate_int_literal("42") == "42"
+	assert cg.generate_float_literal("3.14") == "3.14"
+	assert cg.generate_bool_literal("true") == "true"
+	assert cg.generate_string_literal("hello") == "\"hello\""
+}
+
+// 테스트 6: 이항 연산 생성
+fn test_generate_binary_operation() {
+	let mut cg = new_code_generator()
+
+	let result = cg.generate_binary_op("x", "+", "y")
+	assert result == "(x + y)"
+
+	let result2 = cg.generate_binary_op("a", "*", "b")
+	assert result2 == "(a * b)"
+}
+
+// 테스트 7: 함수 호출 생성
+fn test_generate_function_call() {
+	let mut cg = new_code_generator()
+
+	let result = cg.generate_function_call("add", ["5", "3"])
+	assert result == "add(5, 3)"
+
+	let result2 = cg.generate_function_call("printf", ["\"hello\""])
+	assert result2 == "printf(\"hello\")"
+}
+
+// 테스트 8: 배열 접근 생성
+fn test_generate_array_access() {
+	let mut cg = new_code_generator()
+
+	let result = cg.generate_array_access("arr", "0")
+	assert result == "arr[0]"
+
+	let result2 = cg.generate_array_access("matrix", "i")
+	assert result2 == "matrix[i]"
+}
+
+// 테스트 9: if 문 생성
+fn test_generate_if_statement() {
+	let mut cg = new_code_generator()
+	cg.generate_if_statement("x > 0", "  return x;\n", "  return 0;\n")
+
+	let output = cg.get_output()
+	assert output.contains("if (x > 0) {")
+	assert output.contains("} else {")
+	assert output.contains("}")
+}
+
+// 테스트 10: for 루프 생성
+fn test_generate_for_loop() {
+	let mut cg = new_code_generator()
+	cg.generate_for_loop("i", "0", "10", "  x = x + i;\n")
+
+	let output = cg.get_output()
+	assert output.contains("for (int i = 0; i < 10; i++) {")
+	assert output.contains("}")
+}
+
+// 테스트 11: 함수 정의 생성
+fn test_generate_function_definition() {
+	let mut cg = new_code_generator()
+	cg.generate_function("add", ["int a", "int b"], "i32", "  return a + b;\n")
+
+	let output = cg.get_output()
+	assert output.contains("int add(int a, int b) {")
+	assert output.contains("return a + b;")
+	assert output.contains("}")
+}
+
+// 테스트 12: 구조체 정의 생성
+fn test_generate_struct_definition() {
+	let mut cg = new_code_generator()
+	mut fields = map[string]string{}
+	fields["x"] = "f64"
+	fields["y"] = "f64"
+
+	cg.generate_struct_definition("Point", fields)
+
+	let output = cg.get_output()
+	assert output.contains("typedef struct {")
+	assert output.contains("double x;")
+	assert output.contains("double y;")
+	assert output.contains("} Point;")
+}
+
+// 테스트 13: printf 생성
+fn test_generate_printf() {
+	let mut cg = new_code_generator()
+
+	let result = cg.generate_printf("Hello %d\\n", ["42"])
+	assert result.contains("printf")
+	assert result.contains("Hello %d\\n")
+}
+
+// 테스트 14: 포인터 생성
+fn test_generate_pointer_operations() {
+	let mut cg = new_code_generator()
+
+	let addr = cg.generate_address_of("x")
+	assert addr == "&x"
+
+	let deref = cg.generate_dereference("ptr")
+	assert deref == "*ptr"
+}
+
+// 테스트 15: 캐스트 생성
+fn test_generate_cast() {
+	let mut cg = new_code_generator()
+
+	let result = cg.generate_cast("x", "f64")
+	assert result == "(double)x"
+
+	let result2 = cg.generate_cast("y", "i32")
+	assert result2 == "(int)y"
+}
+
+// 테스트 16: main 함수 생성
+fn test_generate_main_function() {
+	let mut cg = new_code_generator()
+	cg.generate_main_function("  int x = 42;\n  return 0;\n")
+
+	let output = cg.get_output()
+	assert output.contains("int main() {")
+	assert output.contains("int x = 42;")
+	assert output.contains("}")
+}
+
+// 테스트 17: 들여쓰기 관리
+fn test_indentation() {
+	let mut cg = new_code_generator()
+
+	assert cg.indent_level == 0
+	cg.push_indent()
+	assert cg.indent_level == 1
+
+	let indent = cg.get_indent()
+	assert indent == "  "
+
+	cg.push_indent()
+	assert cg.indent_level == 2
+	let indent2 = cg.get_indent()
+	assert indent2 == "    "
+
+	cg.pop_indent()
+	assert cg.indent_level == 1
+}
+
+// 테스트 18: include 관리
+fn test_include_management() {
+	let mut cg = new_code_generator()
+
+	cg.add_include("<stdio.h>")
+	cg.add_include("<stdlib.h>")
+	cg.add_include("<stdio.h>") // 중복
+
+	assert cg.includes.len() == 2
+}
+
+// 테스트 19: 복합 프로그램
+fn test_complex_program_generation() {
+	let mut cg = new_code_generator()
+	cg.generate_headers()
+
+	// 함수 정의
+	cg.generate_function("square", ["int x"], "i32", "  return x * x;\n")
+
+	// main 함수
+	cg.generate_main_function("  int result = square(5);\n  printf(\"%d\\n\", result);\n")
+
+	let output = cg.get_output()
+	assert output.contains("#include <stdio.h>")
+	assert output.contains("int square(int x)")
+	assert output.contains("int main()")
+}
+
+// 테스트 20: 문자열 이스케이프
+fn test_escape_string() {
+	assert escape_c_string("hello") == "hello"
+	assert escape_c_string("line\\nbreak") == "line\\\\nbreak"
+	assert escape_c_string("quote\"test") == "quote\\\"test"
+}

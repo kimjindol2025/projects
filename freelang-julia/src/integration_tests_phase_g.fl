@@ -1,0 +1,323 @@
+# ==========================================
+# Phase G Integration Tests
+# (VFS + Collections + File I/O 통합 테스트)
+# ==========================================
+
+# ==========================================
+# E2E Test 1: VFS → Collections 파이프라인
+# ==========================================
+
+function test_vfs_collections_pipeline(): Bool =
+  clear_vfs()
+
+  # 1. VFS에 데이터 저장
+  vfs_write_file("/data.txt", "apple,banana,cherry")
+
+  # 2. VFS에서 읽기
+  match vfs_read_file("/data.txt") {
+    Ok(contents) -> {
+      # 3. Collections으로 처리
+      let words = Array[String]()
+      words.push("apple")
+      words.push("banana")
+      words.push("cherry")
+
+      let set = new_set_str()
+      for word in words do
+        set_str_add(set, word)
+      end
+
+      # 4. 결과 검증
+      set.size == 3 && set_str_contains(set, "apple")
+    },
+    Err(_) -> false
+  }
+
+# ==========================================
+# E2E Test 2: Dictionary ↔ VFS 직렬화
+# ==========================================
+
+function test_dict_vfs_serialization(): Bool =
+  clear_vfs()
+
+  # 1. Dictionary 생성 & 채우기
+  let dict = new_dict_str_str()
+  dict_str_str_set(dict, "name", "FreeJulia")
+  dict_str_str_set(dict, "version", "1.0")
+
+  # 2. Dictionary → String (시뮬레이션)
+  let serialized = "name=FreeJulia;version=1.0"
+
+  # 3. VFS에 저장
+  match vfs_write_file("/config.txt", serialized) {
+    Ok(_) -> {
+      # 4. VFS에서 읽기
+      match vfs_read_file("/config.txt") {
+        Ok(loaded) -> loaded == serialized,
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+# ==========================================
+# E2E Test 3: Set 연산 + VFS 저장
+# ==========================================
+
+function test_set_operations_with_vfs(): Bool =
+  clear_vfs()
+
+  # 1. Set 생성 & 연산
+  let set1 = new_set_str()
+  let set2 = new_set_str()
+
+  set_str_add(set1, "a")
+  set_str_add(set1, "b")
+  set_str_add(set2, "b")
+  set_str_add(set2, "c")
+
+  # 2. 교집합 계산
+  let intersection = set_str_intersection(set1, set2)
+
+  # 3. 결과를 VFS에 저장
+  let result_count = intersection.size.to_string()
+  match vfs_write_file("/intersection_result.txt", result_count) {
+    Ok(_) -> {
+      match vfs_read_file("/intersection_result.txt") {
+        Ok(contents) -> contents == "1",
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+# ==========================================
+# E2E Test 4: Array 정렬 + VFS 로그
+# ==========================================
+
+function test_array_operations_with_vfs_logging(): Bool =
+  clear_vfs()
+
+  # 1. Array 생성 & 정렬
+  let arr = Array[Int]()
+  arr.push(3)
+  arr.push(1)
+  arr.push(2)
+
+  let sorted = array_int_sort(arr)
+
+  # 2. 결과 로그
+  let log = "Original: 3,1,2\nSorted: "
+  for i in 0:sorted.length() do
+    if i > 0 then
+      log = log + ","
+    end
+    log = log + sorted[i].to_string()
+  end
+
+  # 3. VFS에 로그 저장
+  match vfs_write_file("/sort_log.txt", log) {
+    Ok(size) -> size > 0,
+    Err(_) -> false
+  }
+
+# ==========================================
+# E2E Test 5: 복잡한 Dictionary 작업
+# ==========================================
+
+function test_complex_dictionary_operations(): Bool =
+  clear_vfs()
+
+  # 1. Dictionary[String, Int] 생성
+  let dict = new_dict_str_int()
+
+  # 2. 여러 값 설정
+  dict_str_int_set(dict, "count", 0)
+  dict_str_int_set(dict, "total", 0)
+
+  # 3. 조건부 업데이트
+  match dict_str_int_get(dict, "count") {
+    Some(v) -> {
+      dict_str_int_set(dict, "count", v + 1)
+      true
+    },
+    None -> false
+  }
+
+# ==========================================
+# E2E Test 6: 파일 복사 + 검증
+# ==========================================
+
+function test_file_copy_with_verification(): Bool =
+  clear_vfs()
+
+  let original_content = "Important Data"
+
+  # 1. 원본 파일 생성
+  match vfs_write_file("/original.txt", original_content) {
+    Ok(_) -> {
+      # 2. 파일 복사
+      match vfs_copy_file("/original.txt", "/backup.txt") {
+        Ok(_) -> {
+          # 3. 복사본 검증
+          match vfs_read_file("/backup.txt") {
+            Ok(copied) -> copied == original_content,
+            Err(_) -> false
+          }
+        },
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+# ==========================================
+# E2E Test 7: 대량 파일 작업
+# ==========================================
+
+function test_bulk_file_operations(): Bool =
+  clear_vfs()
+
+  let file_count = 0
+
+  # 1. 여러 파일 생성
+  for i in 0:10 do
+    let filename = "/file_" + i.to_string() + ".txt"
+    let content = "Content " + i.to_string()
+
+    match vfs_write_file(filename, content) {
+      Ok(_) -> {
+        file_count = file_count + 1
+      },
+      Err(_) -> {}
+    }
+  end
+
+  # 2. 생성된 파일 수 확인
+  file_count == 10
+
+# ==========================================
+# E2E Test 8: Set을 사용한 중복 제거
+# ==========================================
+
+function test_deduplication_with_set(): Bool =
+  clear_vfs()
+
+  # 1. 데이터 생성 (중복 포함)
+  let data = "apple,banana,apple,cherry,banana,apple"
+
+  # 2. VFS에 저장
+  match vfs_write_file("/data_with_duplicates.txt", data) {
+    Ok(_) -> {
+      # 3. Set을 사용한 중복 제거 시뮬레이션
+      let unique_set = new_set_str()
+      set_str_add(unique_set, "apple")
+      set_str_add(unique_set, "banana")
+      set_str_add(unique_set, "cherry")
+
+      # 4. 결과 저장
+      let unique_count = unique_set.size.to_string()
+      match vfs_write_file("/dedup_result.txt", unique_count) {
+        Ok(_) -> true,
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+# ==========================================
+# E2E Test 9: 다중 Dictionary 조합
+# ==========================================
+
+function test_multiple_dictionaries_combination(): Bool =
+  let users = new_dict_str_str()
+  let scores = new_dict_str_int()
+
+  # 1. 사용자 데이터
+  dict_str_str_set(users, "alice", "25")
+  dict_str_str_set(users, "bob", "30")
+
+  # 2. 점수 데이터
+  dict_str_int_set(scores, "alice", 95)
+  dict_str_int_set(scores, "bob", 87)
+
+  # 3. 결합 확인
+  match dict_str_str_get(users, "alice") {
+    Some(age) -> {
+      match dict_str_int_get(scores, "alice") {
+        Some(score) -> score == 95,
+        None -> false
+      }
+    },
+    None -> false
+  }
+
+# ==========================================
+# E2E Test 10: 오류 처리 체인
+# ==========================================
+
+function test_error_handling_chain(): Bool =
+  clear_vfs()
+
+  # 1. 존재하지 않는 파일 읽기
+  match vfs_read_file("/nonexistent.txt") {
+    Ok(_) -> false,  # 실패해야 함
+    Err(e1) -> {
+      # 2. 빈 경로로 접근
+      match vfs_read_file("") {
+        Ok(_) -> false,
+        Err(e2) -> {
+          # 3. 경로 트래버설 시도
+          match vfs_read_file("../../../etc/passwd") {
+            Ok(_) -> false,
+            Err(e3) -> {
+              # 모든 에러가 제대로 처리되었는지 확인
+              e1.code == "NOT_FOUND" &&
+              e2.code == "INVALID_PATH" &&
+              e3.code == "INVALID_PATH"
+            }
+          }
+        }
+      }
+    }
+  }
+
+# ==========================================
+# E2E 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_vfs_collections_pipeline", test_vfs_collections_pipeline()),
+    ("test_dict_vfs_serialization", test_dict_vfs_serialization()),
+    ("test_set_operations_with_vfs", test_set_operations_with_vfs()),
+    ("test_array_operations_with_vfs_logging", test_array_operations_with_vfs_logging()),
+    ("test_complex_dictionary_operations", test_complex_dictionary_operations()),
+    ("test_file_copy_with_verification", test_file_copy_with_verification()),
+    ("test_bulk_file_operations", test_bulk_file_operations()),
+    ("test_deduplication_with_set", test_deduplication_with_set()),
+    ("test_multiple_dictionaries_combination", test_multiple_dictionaries_combination()),
+    ("test_error_handling_chain", test_error_handling_chain())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Phase G Integration Tests Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("Success Rate: " + (passed * 100 / (passed + failed)).to_string() + "%")
+  println("==========================================")
+

@@ -1,0 +1,280 @@
+# ==========================================
+# Phase C Task C.8: Integration Tests (E2E)
+# ==========================================
+# 전체 파이프라인을 검증하는 통합 테스트
+
+# Test 1: 간단한 함수 정의 및 호출
+function test_simple_function_definition(): Bool =
+  let source = "function add(a: Int, b: Int): Int = a + b"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  let ir = build_ir(checked)
+  let code = generate_code(ir)
+  code.contains("add") && code.contains("Int")
+
+# Test 2: 변수 할당 및 사용
+function test_variable_assignment(): Bool =
+  let source = "let x: Int = 42; x + 1"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  let ir = build_ir(checked)
+  let code = generate_code(ir)
+  code.contains("x") && code.contains("42")
+
+# Test 3: 조건문 (if-else)
+function test_if_else_statement(): Bool =
+  let source = "if x > 0 then x else -x"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  let ir = build_ir(checked)
+  let code = generate_code(ir)
+  code.contains("if") || code.contains("cond_jump")
+
+# Test 4: 루프 (for)
+function test_for_loop(): Bool =
+  let source = "for i in 1:10 do println(i)"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  let ir = build_ir(checked)
+  let code = generate_code(ir)
+  code.contains("loop") || code.contains("jmp")
+
+# Test 5: 배열 생성 및 접근
+function test_array_creation(): Bool =
+  let source = "let arr: Array<Int> = [1, 2, 3]; arr[0]"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  let ir = build_ir(checked)
+  let code = generate_code(ir)
+  code.contains("array") || code.contains("[]")
+
+# Test 6: 함수 호출
+function test_function_call(): Bool =
+  let source = "add(2, 3)"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  let ir = build_ir(checked)
+  let code = generate_code(ir)
+  code.contains("call") || code.contains("add")
+
+# Test 7: 타입 검사 - 정수
+function test_type_check_int(): Bool =
+  let source = "let x: Int = 42"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  match checked {
+    Some(node) -> true,
+    None -> false
+  }
+
+# Test 8: 타입 검사 - 문자열
+function test_type_check_string(): Bool =
+  let source = "let s: String = \"hello\""
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  match checked {
+    Some(node) -> true,
+    None -> false
+  }
+
+# Test 9: 타입 검사 - 불린
+function test_type_check_bool(): Bool =
+  let source = "let b: Bool = true"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  match checked {
+    Some(node) -> true,
+    None -> false
+  }
+
+# Test 10: 복잡한 표현식 파싱
+function test_complex_expression(): Bool =
+  let source = "let result: Int = (2 + 3) * (4 - 1)"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  match ast {
+    Some(node) -> node.type == "program",
+    None -> false
+  }
+
+# Test 11: 여러 문장 (multiple statements)
+function test_multiple_statements(): Bool =
+  let source = "let x = 1; let y = 2; x + y"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  match ast {
+    Some(node) -> true,
+    None -> false
+  }
+
+# Test 12: 함수 재귀 호출
+function test_recursive_function(): Bool =
+  let source = "function fact(n: Int): Int = if n <= 1 then 1 else n * fact(n - 1)"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  match checked {
+    Some(node) -> true,
+    None -> false
+  }
+
+# Test 13: 람다 함수 (anonymous function)
+function test_lambda_function(): Bool =
+  let source = "let f = fun (x: Int) -> x * 2"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  match ast {
+    Some(node) -> true,
+    None -> false
+  }
+
+# Test 14: 구조체 정의
+function test_struct_definition(): Bool =
+  let source = "struct Point { x: Int, y: Int }"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  match ast {
+    Some(node) -> true,
+    None -> false
+  }
+
+# Test 15: VM 실행 - 간단한 덧셈
+function test_vm_execution_add(): Bool =
+  let bytecode = [
+    new_bytecode(OpLoadInt, ["0", "1"]),
+    new_bytecode(OpLoadInt, ["0", "2"]),
+    new_bytecode(OpAdd, ["0", "1"]),
+    new_bytecode(OpReturn, ["0"])
+  ]
+  let vm = new_vm(bytecode)
+  let result = execute_vm(vm)
+  result.type_tag == "int"
+
+# Test 16: VM 실행 - 곱셈
+function test_vm_execution_mul(): Bool =
+  let bytecode = [
+    new_bytecode(OpLoadInt, ["0", "3"]),
+    new_bytecode(OpLoadInt, ["0", "4"]),
+    new_bytecode(OpMul, ["0", "1"]),
+    new_bytecode(OpReturn, ["0"])
+  ]
+  let vm = new_vm(bytecode)
+  let result = execute_vm(vm)
+  result.type_tag == "int"
+
+# Test 17: IR 생성 - 이진 연산
+function test_ir_binary_op(): Bool =
+  let source = "2 + 3"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  let ir = build_ir(checked)
+  match ir {
+    Some(block) -> block.instructions.length > 0,
+    None -> false
+  }
+
+# Test 18: 에러 처리 - 미정의 변수
+function test_error_undefined_var(): Bool =
+  let source = "let x = undefined_var"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  match checked {
+    Some(_) -> false,  # 타입 검사 실패해야 함
+    None -> true       # 에러 있음 (정상)
+  }
+
+# Test 19: 에러 처리 - 타입 미스매치
+function test_error_type_mismatch(): Bool =
+  let source = "let x: Int = \"hello\""
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let checked = type_check(ast, new_context())
+  match checked {
+    Some(_) -> false,  # 타입 검사 실패해야 함
+    None -> true       # 에러 있음 (정상)
+  }
+
+# Test 20: 종합 파이프라인 검증 (Lexer → Parser → Type Check → IR → CodeGen)
+function test_full_pipeline(): Bool =
+  let source = "function fibonacci(n: Int): Int = if n <= 1 then n else fibonacci(n - 1) + fibonacci(n - 2)"
+  let tokens = tokenize(source)
+  match tokens {
+    Some(toks) ->
+      let ast = parse(toks)
+      match ast {
+        Some(node) ->
+          let checked = type_check(node, new_context())
+          match checked {
+            Some(typed) ->
+              let ir = build_ir(typed)
+              match ir {
+                Some(block) ->
+                  let code = generate_code(block)
+                  code.contains("fibonacci"),
+                None -> false
+              },
+            None -> false
+          },
+        None -> false
+      },
+    None -> false
+  }
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_simple_function_definition", test_simple_function_definition()),
+    ("test_variable_assignment", test_variable_assignment()),
+    ("test_if_else_statement", test_if_else_statement()),
+    ("test_for_loop", test_for_loop()),
+    ("test_array_creation", test_array_creation()),
+    ("test_function_call", test_function_call()),
+    ("test_type_check_int", test_type_check_int()),
+    ("test_type_check_string", test_type_check_string()),
+    ("test_type_check_bool", test_type_check_bool()),
+    ("test_complex_expression", test_complex_expression()),
+    ("test_multiple_statements", test_multiple_statements()),
+    ("test_recursive_function", test_recursive_function()),
+    ("test_lambda_function", test_lambda_function()),
+    ("test_struct_definition", test_struct_definition()),
+    ("test_vm_execution_add", test_vm_execution_add()),
+    ("test_vm_execution_mul", test_vm_execution_mul()),
+    ("test_ir_binary_op", test_ir_binary_op()),
+    ("test_error_undefined_var", test_error_undefined_var()),
+    ("test_error_type_mismatch", test_error_type_mismatch()),
+    ("test_full_pipeline", test_full_pipeline())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Integration Tests Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")

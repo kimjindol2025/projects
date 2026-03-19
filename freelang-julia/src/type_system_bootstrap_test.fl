@@ -1,0 +1,114 @@
+# ==========================================
+# Phase D Task D.3: Type System Bootstrap 테스트
+# (12개 테스트 케이스)
+# ==========================================
+
+# Test 1: 기본 타입 생성 - Int
+function test_type_int(): Bool =
+  let t = type_int()
+  t.name == "Int" && t.kind == "primitive"
+
+# Test 2: 기본 타입 생성 - Float
+function test_type_float(): Bool =
+  let t = type_float()
+  t.name == "Float" && t.kind == "primitive"
+
+# Test 3: 기본 타입 생성 - String
+function test_type_string(): Bool =
+  let t = type_string()
+  t.name == "String" && t.kind == "primitive"
+
+# Test 4: 기본 타입 생성 - Bool
+function test_type_bool(): Bool =
+  let t = type_bool()
+  t.name == "Bool" && t.kind == "primitive"
+
+# Test 5: 복합 타입 - Array[Int]
+function test_type_array(): Bool =
+  let t = type_array(type_int())
+  t.name == "Array[Int]" && t.kind == "array"
+
+# Test 6: 복합 타입 - Option[String]
+function test_type_option(): Bool =
+  let t = type_option(type_string())
+  t.name == "Option[String]" && t.kind == "option"
+
+# Test 7: 복합 타입 - Result[Int, String]
+function test_type_result(): Bool =
+  let t = type_result(type_int(), type_string())
+  t.name == "Result[Int, String]" && t.kind == "result"
+
+# Test 8: 타입 호환성 - 같은 타입
+function test_types_equal(): Bool =
+  let t1 = type_int()
+  let t2 = type_int()
+  types_equal(t1, t2)
+
+# Test 9: 할당 가능성 - Int = Int
+function test_assignable_int(): Bool =
+  let from = type_int()
+  let to = type_int()
+  is_assignable(from, to)
+
+# Test 10: 할당 가능성 - Int to Float
+function test_assignable_int_to_float(): Bool =
+  let from = type_int()
+  let to = type_float()
+  is_assignable(from, to)
+
+# Test 11: 심볼 테이블 - 심볼 정의 및 조회
+function test_symbol_table(): Bool =
+  let ctx = new_context()
+  push_scope(ctx)
+  define_symbol(ctx, "x", type_int(), true)
+
+  match lookup_symbol(ctx, "x") {
+    Some(sym) -> sym.symbol_type.name == "Int",
+    None -> false
+  }
+
+# Test 12: 타입 컨텍스트 - 에러 수집
+function test_type_context_errors(): Bool =
+  let ctx = new_context()
+  ctx.errors.push("Test error")
+  ctx.errors.length() == 1 && ctx.errors[0] == "Test error"
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_type_int", test_type_int()),
+    ("test_type_float", test_type_float()),
+    ("test_type_string", test_type_string()),
+    ("test_type_bool", test_type_bool()),
+    ("test_type_array", test_type_array()),
+    ("test_type_option", test_type_option()),
+    ("test_type_result", test_type_result()),
+    ("test_types_equal", test_types_equal()),
+    ("test_assignable_int", test_assignable_int()),
+    ("test_assignable_int_to_float", test_assignable_int_to_float()),
+    ("test_symbol_table", test_symbol_table()),
+    ("test_type_context_errors", test_type_context_errors())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Type System Bootstrap Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")

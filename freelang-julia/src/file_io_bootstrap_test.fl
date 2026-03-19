@@ -1,0 +1,130 @@
+# ==========================================
+# Phase F Task F.1: File I/O Library 테스트
+# (15개 테스트 케이스)
+# ==========================================
+
+# Test 1: 파일 존재 여부 확인
+function test_file_exists(): Bool =
+  file_exists("test.txt")
+
+# Test 2: 파일 정보 조회
+function test_get_file_info(): Bool =
+  match get_file_info("test.txt") {
+    Some(info) -> info.path == "test.txt",
+    None -> false
+  }
+
+# Test 3: 디렉토리 확인
+function test_is_directory(): Bool =
+  is_directory("/tmp")
+
+# Test 4: 파일 확인
+function test_is_file(): Bool =
+  is_file("test.txt")
+
+# Test 5: 파일 읽기
+function test_read_file(): Bool =
+  match read_file("test.txt") {
+    Some(contents) -> contents.length() >= 0,
+    None -> false
+  }
+
+# Test 6: 파일 라인 읽기
+function test_read_lines(): Bool =
+  match read_lines("test.txt") {
+    Some(lines) -> lines.length() >= 0,
+    None -> false
+  }
+
+# Test 7: 파일 쓰기
+function test_write_file(): Bool =
+  write_file("output.txt", "Hello, World!")
+
+# Test 8: 파일 추가 쓰기
+function test_append_file(): Bool =
+  append_file("output.txt", "\nNew line")
+
+# Test 9: 파일 핸들 읽기
+function test_open_and_read(): Bool =
+  match open_file_read("test.txt") {
+    Some(handle) -> {
+      let data = read_from_handle(handle, 10)
+      close_file(handle)
+      true
+    },
+    None -> false
+  }
+
+# Test 10: 파일 핸들 쓰기
+function test_open_and_write(): Bool =
+  match open_file_write("output.txt") {
+    Some(handle) -> {
+      write_to_handle(handle, "Test data")
+      close_file(handle)
+      true
+    },
+    None -> false
+  }
+
+# Test 11: 디렉토리명 추출
+function test_dirname(): Bool =
+  dirname("/home/user/file.txt") == "/home/user"
+
+# Test 12: 파일명 추출
+function test_basename(): Bool =
+  basename("/home/user/file.txt") == "file.txt"
+
+# Test 13: 경로 결합
+function test_join_path(): Bool =
+  join_path("/home/user", "file.txt") == "/home/user/file.txt"
+
+# Test 14: 절대 경로 확인
+function test_is_absolute_path(): Bool =
+  is_absolute_path("/home/user/file.txt")
+
+# Test 15: 파일 복사
+function test_copy_file(): Bool =
+  copy_file("source.txt", "dest.txt")
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_file_exists", test_file_exists()),
+    ("test_get_file_info", test_get_file_info()),
+    ("test_is_directory", test_is_directory()),
+    ("test_is_file", test_is_file()),
+    ("test_read_file", test_read_file()),
+    ("test_read_lines", test_read_lines()),
+    ("test_write_file", test_write_file()),
+    ("test_append_file", test_append_file()),
+    ("test_open_and_read", test_open_and_read()),
+    ("test_open_and_write", test_open_and_write()),
+    ("test_dirname", test_dirname()),
+    ("test_basename", test_basename()),
+    ("test_join_path", test_join_path()),
+    ("test_is_absolute_path", test_is_absolute_path()),
+    ("test_copy_file", test_copy_file())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("File I/O Library Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")

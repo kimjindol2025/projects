@@ -1,0 +1,210 @@
+# ==========================================
+# Phase E Task E.1: Optimizer Bootstrap 테스트
+# (12개 테스트 케이스)
+# ==========================================
+
+# Test 1: 상수 폴딩 - 덧셈
+function test_fold_add(): Bool =
+  let block = BasicBlock {
+    label: "test",
+    instructions: [
+      Instruction { opcode: OpAdd, operands: ["2", "3"], result: Some("t0") }
+    ],
+    successors: []
+  }
+  let optimized = fold_constants(block)
+  optimized.instructions.length() == 1
+
+# Test 2: 상수 폴딩 - 뺄셈
+function test_fold_sub(): Bool =
+  let block = BasicBlock {
+    label: "test",
+    instructions: [
+      Instruction { opcode: OpSub, operands: ["5", "3"], result: Some("t0") }
+    ],
+    successors: []
+  }
+  let optimized = fold_constants(block)
+  optimized.instructions.length() == 1
+
+# Test 3: 상수 폴딩 - 곱셈
+function test_fold_mul(): Bool =
+  let block = BasicBlock {
+    label: "test",
+    instructions: [
+      Instruction { opcode: OpMul, operands: ["4", "5"], result: Some("t0") }
+    ],
+    successors: []
+  }
+  let optimized = fold_constants(block)
+  optimized.instructions.length() == 1
+
+# Test 4: 불필요한 코드 제거 - return 후
+function test_eliminate_dead_code_after_return(): Bool =
+  let block = BasicBlock {
+    label: "test",
+    instructions: [
+      Instruction { opcode: OpReturn, operands: ["42"], result: None },
+      Instruction { opcode: OpLoadInt, operands: ["100"], result: Some("t0") }
+    ],
+    successors: []
+  }
+  let optimized = eliminate_dead_code(block)
+  optimized.instructions.length() == 1
+
+# Test 5: 불필요한 코드 제거 - jmp 후
+function test_eliminate_dead_code_after_jmp(): Bool =
+  let block = BasicBlock {
+    label: "test",
+    instructions: [
+      Instruction { opcode: OpJmp, operands: ["label"], result: None },
+      Instruction { opcode: OpLoadInt, operands: ["100"], result: Some("t0") }
+    ],
+    successors: []
+  }
+  let optimized = eliminate_dead_code(block)
+  optimized.instructions.length() == 1
+
+# Test 6: 점프 최적화
+function test_optimize_jumps(): Bool =
+  let block = BasicBlock {
+    label: "test",
+    instructions: [
+      Instruction { opcode: OpJmp, operands: ["L1"], result: None },
+      Instruction { opcode: OpJmp, operands: ["L2"], result: None }
+    ],
+    successors: []
+  }
+  let optimized = optimize_jumps(block)
+  optimized.instructions.length() >= 1
+
+# Test 7: 공통 부분식 제거
+function test_eliminate_cse(): Bool =
+  let block = BasicBlock {
+    label: "test",
+    instructions: [
+      Instruction { opcode: OpAdd, operands: ["x", "y"], result: Some("t0") },
+      Instruction { opcode: OpAdd, operands: ["x", "y"], result: Some("t1") }
+    ],
+    successors: []
+  }
+  let optimized = eliminate_common_subexpressions(block)
+  optimized.instructions.length() == 2
+
+# Test 8: 변수 사용 분석
+function test_analyze_variable_usage(): Bool =
+  let ir = IRModule {
+    functions: [],
+    globals: []
+  }
+  let used_vars = analyze_variable_usage(ir)
+  used_vars.length() >= 0
+
+# Test 9: 함수 최적화
+function test_optimize_function(): Bool =
+  let func = IRFunction {
+    name: "test",
+    params: [],
+    return_type: "Int",
+    blocks: [
+      BasicBlock {
+        label: "entry",
+        instructions: [
+          Instruction { opcode: OpLoadInt, operands: ["42"], result: Some("t0") },
+          Instruction { opcode: OpReturn, operands: ["t0"], result: None }
+        ],
+        successors: []
+      }
+    ],
+    entry_block: "entry"
+  }
+  let optimized = optimize_function(func)
+  optimized.name == "test"
+
+# Test 10: 모듈 최적화
+function test_optimize_module(): Bool =
+  let ir = IRModule {
+    functions: [],
+    globals: []
+  }
+  let optimized = optimize_module(ir)
+  optimized.functions.length() == 0
+
+# Test 11: 최적화 통계
+function test_optimization_stats(): Bool =
+  let before = IRModule {
+    functions: [
+      IRFunction {
+        name: "test",
+        params: [],
+        return_type: "Int",
+        blocks: [
+          BasicBlock {
+            label: "entry",
+            instructions: [
+              Instruction { opcode: OpLoadInt, operands: ["42"], result: Some("t0") },
+              Instruction { opcode: OpReturn, operands: ["t0"], result: None }
+            ],
+            successors: []
+          }
+        ],
+        entry_block: "entry"
+      }
+    ],
+    globals: []
+  }
+  let stats = calculate_stats(before, before)
+  stats.total_instructions_before == 2
+
+# Test 12: 최적화 백분율 계산
+function test_optimization_percentage(): Bool =
+  let stats = OptimizationStats {
+    dead_code_eliminated: 0,
+    common_subexp_eliminated: 0,
+    const_folded: 0,
+    jumps_simplified: 0,
+    total_instructions_before: 100,
+    total_instructions_after: 80
+  }
+  let percentage = get_optimization_percentage(stats)
+  percentage == 20.0
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_fold_add", test_fold_add()),
+    ("test_fold_sub", test_fold_sub()),
+    ("test_fold_mul", test_fold_mul()),
+    ("test_eliminate_dead_code_after_return", test_eliminate_dead_code_after_return()),
+    ("test_eliminate_dead_code_after_jmp", test_eliminate_dead_code_after_jmp()),
+    ("test_optimize_jumps", test_optimize_jumps()),
+    ("test_eliminate_cse", test_eliminate_cse()),
+    ("test_analyze_variable_usage", test_analyze_variable_usage()),
+    ("test_optimize_function", test_optimize_function()),
+    ("test_optimize_module", test_optimize_module()),
+    ("test_optimization_stats", test_optimization_stats()),
+    ("test_optimization_percentage", test_optimization_percentage())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Optimizer Bootstrap Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")

@@ -248,8 +248,23 @@ func (g *Generator) generateIfStatement(ifStmt *ast.IfStatement) {
 // generateForStatement generates for loop
 func (g *Generator) generateForStatement(forStmt *ast.ForStatement) {
 	// for i in iterator -> convert to C for loop
-	// This is a simplified implementation
-	g.writeLine("// TODO: for statement")
+	// Use a simple counter-based loop for arrays
+	iterator := g.generateExpression(forStmt.Iterator)
+
+	g.writeLine(fmt.Sprintf("// for %s in %s", forStmt.Variable, iterator))
+	g.writeLine(fmt.Sprintf("for (int _i = 0; _i < sizeof(%s)/sizeof(%s[0]); _i++) {", iterator, iterator))
+	g.indent++
+
+	// Declare loop variable
+	g.writeLine(fmt.Sprintf("int %s = _i;", forStmt.Variable))
+
+	// Loop body
+	for _, stmt := range forStmt.Body {
+		g.generateStatement(stmt)
+	}
+
+	g.indent--
+	g.writeLine("}")
 }
 
 // generateForRangeStatement generates for-range loop
@@ -287,14 +302,18 @@ func (g *Generator) generateExpressionStatement(expr *ast.ExpressionStatement) {
 
 // generateMatchStatement generates match statement (as if-else chain)
 func (g *Generator) generateMatchStatement(match *ast.MatchStatement) {
-	// Convert match to if-else chain for now
+	// Convert match to if-else chain
 	_ = g.generateExpression(match.Expression)
 
 	for i, arm := range match.Arms {
+		// Generate pattern matching condition
+		// Pattern is an interface, so we always use default condition
+		condition := "1" // default: always true (simplified implementation)
+
 		if i == 0 {
-			g.writeLine(fmt.Sprintf("if (1) { // match arm %d", i))
+			g.writeLine(fmt.Sprintf("if (%s) {", condition))
 		} else {
-			g.writeLine("} else {")
+			g.writeLine(fmt.Sprintf("} else if (%s) {", condition))
 		}
 		g.indent++
 

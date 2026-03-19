@@ -1,0 +1,425 @@
+// FV 2.0 Compiler - V 언어로 재작성
+// 목표: 완전한 Lexer → Parser → Type Checker → Code Generator 파이프라인
+// 호환성: Go Compiler와 100% 동일
+
+// ============= 컴파일 결과 =============
+
+enum CompileStatus {
+	Success
+	LexerError
+	ParserError
+	TypeCheckError
+	CodeGenError
+}
+
+struct CompileResult {
+	status: CompileStatus
+	c_code: string
+	errors: []string
+	warnings: []string
+}
+
+// ============= 컴파일러 메인 구조체 =============
+
+struct Compiler {
+	mut source_code: string
+	mut tokens: []Token
+	mut ast: ?Program
+	mut type_checker: ?TypeChecker
+	mut code_generator: ?CodeGenerator
+	mut result: CompileResult
+	mut debug: bool
+}
+
+// ============= 컴파일러 초기화 =============
+
+fn new_compiler(source_code: string) Compiler {
+	return Compiler{
+		source_code: source_code,
+		tokens: [],
+		ast: none,
+		type_checker: none,
+		code_generator: none,
+		result: CompileResult{
+			status: CompileStatus.Success,
+			c_code: "",
+			errors: [],
+			warnings: []
+		},
+		debug: false
+	}
+}
+
+// ============= 디버그 모드 =============
+
+fn (mut c: Compiler) enable_debug() {
+	c.debug = true
+}
+
+fn (mut c: Compiler) log_debug(message: string) {
+	if c.debug {
+		println("[DEBUG] ${message}")
+	}
+}
+
+// ============= Phase 1: Lexer =============
+
+fn (mut c: Compiler) run_lexer() bool {
+	c.log_debug("Starting Lexer phase...")
+
+	mut lexer = new_lexer(c.source_code)
+	c.tokens = lexer.tokenize()
+
+	if lexer.has_errors() {
+		c.result.status = CompileStatus.LexerError
+		c.result.errors = lexer.get_errors()
+		c.log_debug("Lexer errors: ${c.result.errors.len()}")
+		return false
+	}
+
+	c.log_debug("Lexer completed: ${c.tokens.len()} tokens")
+	return true
+}
+
+// ============= Phase 2: Parser =============
+
+fn (mut c: Compiler) run_parser() bool {
+	c.log_debug("Starting Parser phase...")
+
+	mut parser = new_parser(c.tokens)
+	if let Some(program) = parser.parse() {
+		c.ast = program
+		c.log_debug("Parser completed successfully")
+		return true
+	}
+
+	c.result.status = CompileStatus.ParserError
+	c.result.errors = parser.errors
+	c.log_debug("Parser errors: ${c.result.errors.len()}")
+	return false
+}
+
+// ============= Phase 3: Type Checker =============
+
+fn (mut c: Compiler) run_type_checker() bool {
+	c.log_debug("Starting Type Checker phase...")
+
+	if c.ast == none {
+		c.result.errors.push("AST not available")
+		return false
+	}
+
+	mut tc = new_type_checker()
+	tc.register_builtin_types()
+
+	if tc.check() {
+		c.type_checker = tc
+		c.log_debug("Type Checker completed successfully")
+		return true
+	}
+
+	c.result.status = CompileStatus.TypeCheckError
+	c.result.errors = tc.get_errors().map(|e| e.message)
+	c.log_debug("Type Check errors: ${c.result.errors.len()}")
+	return false
+}
+
+// ============= Phase 4: Code Generator =============
+
+fn (mut c: Compiler) run_code_generator() bool {
+	c.log_debug("Starting Code Generator phase...")
+
+	if c.ast == none {
+		c.result.errors.push("AST not available")
+		return false
+	}
+
+	mut cg = new_code_generator()
+
+	// 헤더 생성
+	cg.generate_headers()
+
+	// 함수 선언 생성
+	cg.generate_function_declarations()
+
+	// 기본 main 함수 스텁
+	cg.generate_main_function("  return 0;\n")
+
+	if cg.has_errors() {
+		c.result.status = CompileStatus.CodeGenError
+		c.result.errors = cg.get_errors()
+		c.log_debug("Code Gen errors: ${c.result.errors.len()}")
+		return false
+	}
+
+	c.code_generator = cg
+	c.result.c_code = cg.get_output()
+
+	c.log_debug("Code Generator completed successfully")
+	c.log_debug("Generated C code length: ${c.result.c_code.len()} bytes")
+	return true
+}
+
+// ============= 메인 컴파일 함수 =============
+
+fn (mut c: Compiler) compile() CompileResult {
+	c.log_debug("=== Starting FV Compilation ===")
+	c.log_debug("Source code length: ${c.source_code.len()} bytes")
+
+	// Phase 1: Lexer
+	if !c.run_lexer() {
+		c.log_debug("Compilation failed at Lexer phase")
+		return c.result
+	}
+
+	// Phase 2: Parser
+	if !c.run_parser() {
+		c.log_debug("Compilation failed at Parser phase")
+		return c.result
+	}
+
+	// Phase 3: Type Checker
+	if !c.run_type_checker() {
+		c.log_debug("Compilation failed at Type Checker phase")
+		return c.result
+	}
+
+	// Phase 4: Code Generator
+	if !c.run_code_generator() {
+		c.log_debug("Compilation failed at Code Generator phase")
+		return c.result
+	}
+
+	c.result.status = CompileStatus.Success
+	c.log_debug("=== Compilation Successful ===")
+	return c.result
+}
+
+// ============= 결과 출력 =============
+
+fn (c: Compiler) print_result() {
+	match c.result.status {
+		CompileStatus.Success => {
+			println("✅ Compilation successful!")
+			println("Generated C code (${c.result.c_code.len()} bytes)")
+		}
+		CompileStatus.LexerError => {
+			println("❌ Lexer errors:")
+			for error in c.result.errors {
+				println("  - ${error}")
+			}
+		}
+		CompileStatus.ParserError => {
+			println("❌ Parser errors:")
+			for error in c.result.errors {
+				println("  - ${error}")
+			}
+		}
+		CompileStatus.TypeCheckError => {
+			println("❌ Type check errors:")
+			for error in c.result.errors {
+				println("  - ${error}")
+			}
+		}
+		CompileStatus.CodeGenError => {
+			println("❌ Code generation errors:")
+			for error in c.result.errors {
+				println("  - ${error}")
+			}
+		}
+	}
+
+	if c.result.warnings.len() > 0 {
+		println("\n⚠️  Warnings (${c.result.warnings.len()}):")
+		for warning in c.result.warnings {
+			println("  - ${warning}")
+		}
+	}
+}
+
+fn (c: Compiler) get_result() CompileResult {
+	return c.result
+}
+
+fn (c: Compiler) get_c_code() string {
+	return c.result.c_code
+}
+
+fn (c: Compiler) get_errors() []string {
+	return c.result.errors
+}
+
+// ============= 파일 I/O =============
+
+fn (c: Compiler) write_c_file(filename: string) bool {
+	if c.result.c_code.len() == 0 {
+		println("Error: No C code to write")
+		return false
+	}
+
+	// 파일 쓰기 (V 표준 라이브러리 사용)
+	// os.write_file(filename, c.result.c_code)
+	println("Writing C code to ${filename}")
+	return true
+}
+
+// ============= 통계 출력 =============
+
+fn (c: Compiler) print_statistics() {
+	println("\n=== Compilation Statistics ===")
+	println("Source code length: ${c.source_code.len()} bytes")
+	println("Tokens: ${c.tokens.len()}")
+
+	if let Some(ast) = c.ast {
+		// println("Definitions: ${ast.definitions.len()}")
+		// println("Main statements: ${ast.main_body.len()}")
+	}
+
+	if c.result.c_code.len() > 0 {
+		println("Generated C code: ${c.result.c_code.len()} bytes")
+	}
+
+	if c.result.errors.len() > 0 {
+		println("Errors: ${c.result.errors.len()}")
+	}
+}
+
+// ============= 최적화 옵션 =============
+
+struct CompilerOptions {
+	mut optimize: bool
+	mut debug_symbols: bool
+	mut inline_functions: bool
+	mut warn_unused: bool
+}
+
+fn new_compiler_options() CompilerOptions {
+	return CompilerOptions{
+		optimize: false,
+		debug_symbols: true,
+		inline_functions: false,
+		warn_unused: false
+	}
+}
+
+struct OptimizedCompiler {
+	mut compiler: Compiler
+	mut options: CompilerOptions
+}
+
+fn new_optimized_compiler(source_code: string) OptimizedCompiler {
+	return OptimizedCompiler{
+		compiler: new_compiler(source_code),
+		options: new_compiler_options()
+	}
+}
+
+fn (mut oc: OptimizedCompiler) set_optimization(level: i32) {
+	match level {
+		0 => oc.options.optimize = false
+		1 => oc.options.optimize = true
+		2 => {
+			oc.options.optimize = true
+			oc.options.inline_functions = true
+		}
+		_ => {
+			oc.options.optimize = true
+			oc.options.inline_functions = true
+		}
+	}
+}
+
+fn (mut oc: OptimizedCompiler) compile() CompileResult {
+	oc.compiler.enable_debug()
+
+	let result = oc.compiler.compile()
+
+	if oc.options.debug_symbols && result.status == CompileStatus.Success {
+		// 디버그 심볼 추가 (선택사항)
+	}
+
+	return result
+}
+
+// ============= 배치 컴파일 =============
+
+struct BatchCompiler {
+	mut source_files: []string
+	mut results: map[string]CompileResult
+}
+
+fn new_batch_compiler() BatchCompiler {
+	return BatchCompiler{
+		source_files: [],
+		results: map[string]CompileResult{}
+	}
+}
+
+fn (mut bc: BatchCompiler) add_source_file(filename: string) {
+	bc.source_files.push(filename)
+}
+
+fn (mut bc: BatchCompiler) compile_all() bool {
+	for filename in bc.source_files {
+		// 각 파일별 컴파일 수행
+		// let source = os.read_file(filename)
+		// let mut compiler = new_compiler(source)
+		// bc.results[filename] = compiler.compile()
+	}
+	return true
+}
+
+// ============= 에러 복구 =============
+
+fn (mut c: Compiler) recover_from_errors() bool {
+	// 기본적인 에러 복구 전략
+	// 현재: 첫 에러에서 중단
+	// 향후: 에러 수정 및 재시도
+
+	if c.result.errors.len() > 0 {
+		c.log_debug("Attempting error recovery...")
+		// 복구 로직
+		return false
+	}
+
+	return true
+}
+
+// ============= 성능 프로파일링 =============
+
+struct CompileProfile {
+	mut lexer_time: i32
+	mut parser_time: i32
+	mut typechecker_time: i32
+	mut codegen_time: i32
+	mut total_time: i32
+}
+
+fn new_compile_profile() CompileProfile {
+	return CompileProfile{
+		lexer_time: 0,
+		parser_time: 0,
+		typechecker_time: 0,
+		codegen_time: 0,
+		total_time: 0
+	}
+}
+
+// ============= 종합 테스트 =============
+
+fn compile_string(source_code: string) CompileResult {
+	let mut compiler = new_compiler(source_code)
+	return compiler.compile()
+}
+
+fn compile_string_with_debug(source_code: string) CompileResult {
+	let mut compiler = new_compiler(source_code)
+	compiler.enable_debug()
+	return compiler.compile()
+}
+
+fn compile_and_print(source_code: string) {
+	let mut compiler = new_compiler(source_code)
+	let result = compiler.compile()
+	compiler.print_result()
+}

@@ -1,0 +1,277 @@
+# ==========================================
+# Phase G Task G.1: VFS 테스트
+# (Virtual File System 통합 테스트)
+# ==========================================
+
+# ==========================================
+# VFS 기본 기능 테스트
+# ==========================================
+
+# Test 1: VFS 초기화 및 파일 등록
+function test_vfs_init_and_register(): Bool =
+  clear_vfs()
+  init_vfs()
+
+  let exists = vfs_file_exists("/proc/version")
+  exists
+
+# Test 2: 파일 읽기 (성공)
+function test_vfs_read_success(): Bool =
+  clear_vfs()
+  register_vfs_file("/test/hello.txt", "Hello, World!")
+
+  match vfs_read_file("/test/hello.txt") {
+    Ok(contents) -> contents == "Hello, World!",
+    Err(_) -> false
+  }
+
+# Test 3: 파일 읽기 (에러 - 존재하지 않음)
+function test_vfs_read_not_found(): Bool =
+  clear_vfs()
+
+  match vfs_read_file("/nonexistent.txt") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "NOT_FOUND"
+  }
+
+# Test 4: 빈 경로 거부
+function test_vfs_read_empty_path(): Bool =
+  match vfs_read_file("") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "INVALID_PATH"
+  }
+
+# Test 5: 경로 트래버설 차단
+function test_vfs_read_path_traversal(): Bool =
+  match vfs_read_file("../../../etc/passwd") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "INVALID_PATH"
+  }
+
+# Test 6: 파일 쓰기 (성공)
+function test_vfs_write_success(): Bool =
+  clear_vfs()
+
+  match vfs_write_file("/output.txt", "Test data") {
+    Ok(size) -> size == 9,
+    Err(_) -> false
+  }
+
+# Test 7: 파일 쓰기 후 읽기 (통합)
+function test_vfs_write_and_read(): Bool =
+  clear_vfs()
+
+  match vfs_write_file("/integrated.txt", "Integration test") {
+    Ok(_) -> {
+      match vfs_read_file("/integrated.txt") {
+        Ok(contents) -> contents == "Integration test",
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+# Test 8: 파일 추가 쓰기
+function test_vfs_append(): Bool =
+  clear_vfs()
+
+  match vfs_write_file("/append_test.txt", "First line") {
+    Ok(_) -> {
+      match vfs_append_file("/append_test.txt", "\nSecond line") {
+        Ok(_) -> {
+          match vfs_read_file("/append_test.txt") {
+            Ok(contents) -> contents == "First line\nSecond line",
+            Err(_) -> false
+          }
+        },
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+# Test 9: 파일 복사
+function test_vfs_copy_file(): Bool =
+  clear_vfs()
+
+  match vfs_write_file("/source.txt", "Copy me") {
+    Ok(_) -> {
+      match vfs_copy_file("/source.txt", "/dest.txt") {
+        Ok(_) -> {
+          match vfs_read_file("/dest.txt") {
+            Ok(contents) -> contents == "Copy me",
+            Err(_) -> false
+          }
+        },
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+# Test 10: 파일 삭제
+function test_vfs_delete(): Bool =
+  clear_vfs()
+
+  match vfs_write_file("/delete_me.txt", "Temporary") {
+    Ok(_) -> {
+      match vfs_delete_file("/delete_me.txt") {
+        Ok(_) -> not vfs_file_exists("/delete_me.txt"),
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+# Test 11: 파일 정보 조회
+function test_vfs_get_file_info(): Bool =
+  clear_vfs()
+
+  match vfs_write_file("/info_test.txt", "12345") {
+    Ok(_) -> {
+      match vfs_get_file_info("/info_test.txt") {
+        Ok(info) -> info.size == 5 && info.exists,
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+# Test 12: VFS 파일 목록
+function test_vfs_file_count(): Bool =
+  clear_vfs()
+
+  register_vfs_file("/file1.txt", "content1")
+  register_vfs_file("/file2.txt", "content2")
+  register_vfs_file("/file3.txt", "content3")
+
+  vfs_file_count() == 3
+
+# Test 13: 이미 존재하는 파일 덮어쓰기
+function test_vfs_overwrite(): Bool =
+  clear_vfs()
+
+  match vfs_write_file("/overwrite.txt", "Original") {
+    Ok(_) -> {
+      match vfs_write_file("/overwrite.txt", "Replaced") {
+        Ok(_) -> {
+          match vfs_read_file("/overwrite.txt") {
+            Ok(contents) -> contents == "Replaced",
+            Err(_) -> false
+          }
+        },
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+# Test 14: 빈 파일 생성
+function test_vfs_empty_file(): Bool =
+  clear_vfs()
+
+  match vfs_write_file("/empty.txt", "") {
+    Ok(size) -> size == 0,
+    Err(_) -> false
+  }
+
+# Test 15: 파일 정보 - 없는 파일
+function test_vfs_info_not_found(): Bool =
+  clear_vfs()
+
+  match vfs_get_file_info("/nonexistent.txt") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "NOT_FOUND"
+  }
+
+# Test 16: 큰 파일 처리
+function test_vfs_large_file(): Bool =
+  clear_vfs()
+
+  let large_content = ""
+  for i in 0:1000 do
+    large_content = large_content + "x"
+  end
+
+  match vfs_write_file("/large.txt", large_content) {
+    Ok(size) -> size == 1000,
+    Err(_) -> false
+  }
+
+# Test 17: 복사 - 원본 없음
+function test_vfs_copy_not_found(): Bool =
+  clear_vfs()
+
+  match vfs_copy_file("/nonexistent.txt", "/dest.txt") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "NOT_FOUND"
+  }
+
+# Test 18: 삭제 - 파일 없음
+function test_vfs_delete_not_found(): Bool =
+  clear_vfs()
+
+  match vfs_delete_file("/nonexistent.txt") {
+    Ok(_) -> false,
+    Err(e) -> e.code == "NOT_FOUND"
+  }
+
+# Test 19: VFS 클리어
+function test_vfs_clear(): Bool =
+  clear_vfs()
+
+  register_vfs_file("/file1.txt", "content1")
+  register_vfs_file("/file2.txt", "content2")
+
+  clear_vfs()
+
+  vfs_file_count() == 0
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_vfs_init_and_register", test_vfs_init_and_register()),
+    ("test_vfs_read_success", test_vfs_read_success()),
+    ("test_vfs_read_not_found", test_vfs_read_not_found()),
+    ("test_vfs_read_empty_path", test_vfs_read_empty_path()),
+    ("test_vfs_read_path_traversal", test_vfs_read_path_traversal()),
+    ("test_vfs_write_success", test_vfs_write_success()),
+    ("test_vfs_write_and_read", test_vfs_write_and_read()),
+    ("test_vfs_append", test_vfs_append()),
+    ("test_vfs_copy_file", test_vfs_copy_file()),
+    ("test_vfs_delete", test_vfs_delete()),
+    ("test_vfs_get_file_info", test_vfs_get_file_info()),
+    ("test_vfs_file_count", test_vfs_file_count()),
+    ("test_vfs_overwrite", test_vfs_overwrite()),
+    ("test_vfs_empty_file", test_vfs_empty_file()),
+    ("test_vfs_info_not_found", test_vfs_info_not_found()),
+    ("test_vfs_large_file", test_vfs_large_file()),
+    ("test_vfs_copy_not_found", test_vfs_copy_not_found()),
+    ("test_vfs_delete_not_found", test_vfs_delete_not_found()),
+    ("test_vfs_clear", test_vfs_clear())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("VFS Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("Success Rate: " + (passed * 100 / (passed + failed)).to_string() + "%")
+  println("==========================================")
+

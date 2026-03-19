@@ -1,0 +1,352 @@
+# ==========================================
+# Phase F Task F.1: File I/O Library Bootstrap
+# (FreeJulia File I/O를 FreeJulia로 재작성)
+# ==========================================
+# Self-Hosting File I/O Library
+#
+# 기능:
+# - 파일 읽기/쓰기
+# - 디렉토리 관리
+# - 경로 처리
+# - 파일 메타데이터
+
+# ==========================================
+# 파일 상태
+# ==========================================
+
+record FileInfo =
+  path: String
+  size: Int
+  exists: Bool
+  is_directory: Bool
+  is_readable: Bool
+  is_writable: Bool
+  created_time: Int
+  modified_time: Int
+
+# ==========================================
+# 파일 핸들
+# ==========================================
+
+record FileHandle =
+  path: String
+  mode: String  # "read", "write", "append"
+  position: Int
+  is_open: Bool
+  contents: String
+
+# ==========================================
+# 파일 시스템 연산
+# ==========================================
+
+# 파일 존재 여부 확인
+function file_exists(path: String): Bool =
+  # 시뮬레이션: 실제로는 OS 레벨 호출
+  path.length() > 0
+
+# 파일 정보 조회
+function get_file_info(path: String): Option[FileInfo] =
+  if file_exists(path) then
+    Some(FileInfo {
+      path: path,
+      size: 0,
+      exists: true,
+      is_directory: false,
+      is_readable: true,
+      is_writable: true,
+      created_time: 0,
+      modified_time: 0
+    })
+  else
+    None
+  end
+
+# 디렉토리인지 확인
+function is_directory(path: String): Bool =
+  match get_file_info(path) {
+    Some(info) -> info.is_directory,
+    None -> false
+  }
+
+# 파일인지 확인
+function is_file(path: String): Bool =
+  match get_file_info(path) {
+    Some(info) -> not info.is_directory,
+    None -> false
+  }
+
+# ==========================================
+# 파일 읽기
+# ==========================================
+
+# 파일 전체 읽기
+function read_file(path: String): Option[String] =
+  if not file_exists(path) then
+    return None
+  end
+
+  # 시뮬레이션: 실제로는 파일 시스템 접근
+  Some("file contents")
+
+# 파일 라인 단위 읽기
+function read_lines(path: String): Option[Array[String]] =
+  match read_file(path) {
+    Some(contents) -> {
+      let lines = Array[String]()
+      let current_line = ""
+      for i in 0:contents.length() do
+        let ch = contents[i]
+        if ch == '\n' then
+          lines.push(current_line)
+          current_line = ""
+        else
+          current_line = current_line + ch.to_string()
+        end
+      end
+      if current_line.length() > 0 then
+        lines.push(current_line)
+      end
+      Some(lines)
+    },
+    None -> None
+  }
+
+# 파일 오픈 (읽기 모드)
+function open_file_read(path: String): Option[FileHandle] =
+  if not file_exists(path) then
+    return None
+  end
+
+  match read_file(path) {
+    Some(contents) -> {
+      Some(FileHandle {
+        path: path,
+        mode: "read",
+        position: 0,
+        is_open: true,
+        contents: contents
+      })
+    },
+    None -> None
+  }
+
+# 파일 읽기 (핸들)
+function read_from_handle(handle: FileHandle, bytes: Int): String =
+  if not handle.is_open then
+    return ""
+  end
+
+  let end_pos = handle.position + bytes
+  if end_pos > handle.contents.length() then
+    end_pos = handle.contents.length()
+  end
+
+  let result = ""
+  for i in handle.position:end_pos do
+    result = result + handle.contents[i].to_string()
+  end
+
+  handle.position = end_pos
+  result
+
+# ==========================================
+# 파일 쓰기
+# ==========================================
+
+# 파일 쓰기 (전체 덮어쓰기)
+function write_file(path: String, contents: String): Bool =
+  # 시뮬레이션: 실제로는 파일 시스템 쓰기
+  true
+
+# 파일 추가 쓰기 (append)
+function append_file(path: String, contents: String): Bool =
+  # 시뮬레이션: 실제로는 파일 시스템 추가 쓰기
+  true
+
+# 파일 오픈 (쓰기 모드)
+function open_file_write(path: String): Option[FileHandle] =
+  Some(FileHandle {
+    path: path,
+    mode: "write",
+    position: 0,
+    is_open: true,
+    contents: ""
+  })
+
+# 파일 오픈 (추가 모드)
+function open_file_append(path: String): Option[FileHandle] =
+  match read_file(path) {
+    Some(existing) -> {
+      Some(FileHandle {
+        path: path,
+        mode: "append",
+        position: existing.length(),
+        is_open: true,
+        contents: existing
+      })
+    },
+    None -> {
+      Some(FileHandle {
+        path: path,
+        mode: "append",
+        position: 0,
+        is_open: true,
+        contents: ""
+      })
+    }
+  }
+
+# 파일 쓰기 (핸들)
+function write_to_handle(handle: FileHandle, data: String): Bool =
+  if not handle.is_open then
+    return false
+  end
+
+  handle.contents = handle.contents + data
+  handle.position = handle.contents.length()
+  true
+
+# 파일 핸들 닫기
+function close_file(handle: FileHandle): Bool =
+  if handle.mode == "read" then
+    handle.is_open = false
+    true
+  else if handle.mode == "write" then
+    write_file(handle.path, handle.contents)
+    handle.is_open = false
+    true
+  else if handle.mode == "append" then
+    append_file(handle.path, handle.contents)
+    handle.is_open = false
+    true
+  else
+    false
+  end
+
+# ==========================================
+# 경로 처리
+# ==========================================
+
+# 디렉토리명 추출
+function dirname(path: String): String =
+  let last_slash = -1
+  for i in 0:path.length() do
+    if path[i] == '/' then
+      last_slash = i
+    end
+  end
+
+  if last_slash == -1 then
+    return "."
+  else
+    return path.substring(0, last_slash)
+  end
+
+# 파일명 추출
+function basename(path: String): String =
+  let last_slash = -1
+  for i in 0:path.length() do
+    if path[i] == '/' then
+      last_slash = i
+    end
+  end
+
+  if last_slash == -1 then
+    return path
+  else
+    return path.substring(last_slash + 1, path.length())
+  end
+
+# 경로 결합
+function join_path(dir: String, filename: String): String =
+  if dir == "." then
+    return filename
+  else
+    return dir + "/" + filename
+  end
+
+# 절대 경로 확인
+function is_absolute_path(path: String): Bool =
+  path.length() > 0 && path[0] == '/'
+
+# ==========================================
+# 디렉토리 연산
+# ==========================================
+
+# 디렉토리 생성
+function mkdir(path: String): Bool =
+  # 시뮬레이션: 실제로는 OS 레벨 호출
+  true
+
+# 디렉토리 삭제
+function rmdir(path: String): Bool =
+  # 시뮬레이션: 실제로는 OS 레벨 호출
+  true
+
+# 디렉토리 목록 조회
+function list_directory(path: String): Option[Array[String]] =
+  if not is_directory(path) then
+    return None
+  end
+
+  # 시뮬레이션: 실제로는 OS 레벨 호출
+  Some(["file1.fl", "file2.fl", "dir1"])
+
+# ==========================================
+# 파일 삭제
+# ==========================================
+
+function delete_file(path: String): Bool =
+  if not file_exists(path) then
+    return false
+  end
+
+  # 시뮬레이션: 실제로는 OS 레벨 호출
+  true
+
+# ==========================================
+# 파일 복사/이동
+# ==========================================
+
+function copy_file(source: String, dest: String): Bool =
+  match read_file(source) {
+    Some(contents) -> {
+      write_file(dest, contents)
+      true
+    },
+    None -> false
+  }
+
+function move_file(source: String, dest: String): Bool =
+  if copy_file(source, dest) then
+    delete_file(source)
+    true
+  else
+    false
+  end
+
+# ==========================================
+# 파일 크기
+# ==========================================
+
+function get_file_size(path: String): Option[Int] =
+  match read_file(path) {
+    Some(contents) -> Some(contents.length()),
+    None -> None
+  }
+
+# ==========================================
+# 공개 API
+# ==========================================
+
+function read_all(path: String): Option[String] =
+  read_file(path)
+
+function read_all_lines(path: String): Option[Array[String]] =
+  read_lines(path)
+
+function write_all(path: String, contents: String): Bool =
+  write_file(path, contents)
+
+function append_all(path: String, contents: String): Bool =
+  append_file(path, contents)

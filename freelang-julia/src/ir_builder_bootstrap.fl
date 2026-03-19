@@ -1,0 +1,433 @@
+# ==========================================
+# Phase D Task D.5: IR Builder Bootstrap
+# (FreeJulia IR Builder를 FreeJulia로 재작성)
+# ==========================================
+# Self-Hosting IR (Intermediate Representation) Builder
+#
+# 기능:
+# - AST → IR 변환
+# - BasicBlock 생성
+# - 명령어 생성 & 최적화 기본
+
+# ==========================================
+# 명령어 타입
+# ==========================================
+
+record OpCode =
+  | OpLoadInt
+  | OpLoadFloat
+  | OpLoadString
+  | OpLoadBool
+  | OpLoadNil
+  | OpAdd
+  | OpSub
+  | OpMul
+  | OpDiv
+  | OpMod
+  | OpAnd
+  | OpOr
+  | OpNot
+  | OpEq
+  | OpNeq
+  | OpLt
+  | OpLe
+  | OpGt
+  | OpGe
+  | OpCall
+  | OpReturn
+  | OpJmp
+  | OpCondJmp
+  | OpLoadVar
+  | OpStoreVar
+  | OpLoadArray
+  | OpStoreArray
+  | OpArrayNew
+  | OpArrayLen
+  | OpFieldGet
+  | OpFieldSet
+  | OpMatch
+  | OpLabel
+
+# ==========================================
+# IR 명령어
+# ==========================================
+
+record Instruction =
+  opcode: OpCode
+  operands: Array[String]
+  result: Option[String]
+
+# ==========================================
+# BasicBlock
+# ==========================================
+
+record BasicBlock =
+  label: String
+  instructions: Array[Instruction]
+  successors: Array[String]
+
+# ==========================================
+# IR Function
+# ==========================================
+
+record IRFunction =
+  name: String
+  params: Array[String]
+  return_type: String
+  blocks: Array[BasicBlock]
+  entry_block: String
+
+# ==========================================
+# IR Module
+# ==========================================
+
+record IRModule =
+  functions: Array[IRFunction]
+  globals: Array[(String, String)]
+
+# ==========================================
+# IR Builder 상태
+# ==========================================
+
+record IRBuilder =
+  current_block: BasicBlock
+  blocks: Array[BasicBlock]
+  label_counter: Int
+  var_counter: Int
+  current_function: String
+
+# ==========================================
+# 헬퍼 함수
+# ==========================================
+
+# 새로운 라벨 생성
+function new_label(builder: IRBuilder): String =
+  builder.label_counter = builder.label_counter + 1
+  "L" + builder.label_counter.to_string()
+
+# 새로운 임시 변수 생성
+function new_var(builder: IRBuilder): String =
+  builder.var_counter = builder.var_counter + 1
+  "t" + builder.var_counter.to_string()
+
+# 명령어 추가
+function emit(builder: IRBuilder, instr: Instruction): Void =
+  builder.current_block.instructions.push(instr)
+
+# BasicBlock 시작
+function begin_block(builder: IRBuilder, label: String): Void =
+  let block = BasicBlock {
+    label: label,
+    instructions: [],
+    successors: []
+  }
+  builder.blocks.push(block)
+  builder.current_block = block
+
+# ==========================================
+# 명령어 생성 헬퍼
+# ==========================================
+
+# 상수 로드
+function emit_load_int(builder: IRBuilder, value: String): String =
+  let result = new_var(builder)
+  let instr = Instruction {
+    opcode: OpLoadInt,
+    operands: [value],
+    result: Some(result)
+  }
+  emit(builder, instr)
+  result
+
+function emit_load_float(builder: IRBuilder, value: String): String =
+  let result = new_var(builder)
+  let instr = Instruction {
+    opcode: OpLoadFloat,
+    operands: [value],
+    result: Some(result)
+  }
+  emit(builder, instr)
+  result
+
+function emit_load_string(builder: IRBuilder, value: String): String =
+  let result = new_var(builder)
+  let instr = Instruction {
+    opcode: OpLoadString,
+    operands: [value],
+    result: Some(result)
+  }
+  emit(builder, instr)
+  result
+
+function emit_load_bool(builder: IRBuilder, value: String): String =
+  let result = new_var(builder)
+  let instr = Instruction {
+    opcode: OpLoadBool,
+    operands: [value],
+    result: Some(result)
+  }
+  emit(builder, instr)
+  result
+
+# 이항 연산
+function emit_binary_op(builder: IRBuilder, opcode: OpCode, left: String, right: String): String =
+  let result = new_var(builder)
+  let instr = Instruction {
+    opcode: opcode,
+    operands: [left, right],
+    result: Some(result)
+  }
+  emit(builder, instr)
+  result
+
+# 변수 로드
+function emit_load_var(builder: IRBuilder, name: String): String =
+  let result = new_var(builder)
+  let instr = Instruction {
+    opcode: OpLoadVar,
+    operands: [name],
+    result: Some(result)
+  }
+  emit(builder, instr)
+  result
+
+# 변수 저장
+function emit_store_var(builder: IRBuilder, name: String, value: String): Void =
+  let instr = Instruction {
+    opcode: OpStoreVar,
+    operands: [name, value],
+    result: None
+  }
+  emit(builder, instr)
+
+# 함수 호출
+function emit_call(builder: IRBuilder, func_name: String, args: Array[String]): String =
+  let result = new_var(builder)
+  let operands = [func_name] + args
+  let instr = Instruction {
+    opcode: OpCall,
+    operands: operands,
+    result: Some(result)
+  }
+  emit(builder, instr)
+  result
+
+# 반환
+function emit_return(builder: IRBuilder, value: Option[String]): Void =
+  let operands = match value {
+    Some(v) -> [v],
+    None -> []
+  }
+  let instr = Instruction {
+    opcode: OpReturn,
+    operands: operands,
+    result: None
+  }
+  emit(builder, instr)
+
+# 점프
+function emit_jmp(builder: IRBuilder, target: String): Void =
+  let instr = Instruction {
+    opcode: OpJmp,
+    operands: [target],
+    result: None
+  }
+  emit(builder, instr)
+
+# 조건부 점프
+function emit_cond_jmp(builder: IRBuilder, cond: String, true_target: String, false_target: String): Void =
+  let instr = Instruction {
+    opcode: OpCondJmp,
+    operands: [cond, true_target, false_target],
+    result: None
+  }
+  emit(builder, instr)
+
+# ==========================================
+# AST → IR 변환
+# ==========================================
+
+function build_ir_from_node(node: ASTNode, builder: IRBuilder): Option[String] =
+  match node.type {
+    "literal" -> {
+      match node.name {
+        "int" -> Some(emit_load_int(builder, node.value)),
+        "float" -> Some(emit_load_float(builder, node.value)),
+        "string" -> Some(emit_load_string(builder, node.value)),
+        "bool" -> Some(emit_load_bool(builder, node.value)),
+        "nil" -> Some(emit_load_bool(builder, "nil")),
+        _ -> None
+      }
+    },
+    "identifier" -> {
+      Some(emit_load_var(builder, node.name))
+    },
+    "binary" -> {
+      if node.children.length() >= 2 then
+        let left = build_ir_from_node(node.children[0], builder)
+        let right = build_ir_from_node(node.children[1], builder)
+
+        match (left, right) {
+          (Some(l), Some(r)) -> {
+            let op = match node.properties[0].1 {
+              "+" -> OpAdd,
+              "-" -> OpSub,
+              "*" -> OpMul,
+              "/" -> OpDiv,
+              "%" -> OpMod,
+              "&&" -> OpAnd,
+              "||" -> OpOr,
+              "==" -> OpEq,
+              "!=" -> OpNeq,
+              "<" -> OpLt,
+              "<=" -> OpLe,
+              ">" -> OpGt,
+              ">=" -> OpGe,
+              _ -> OpAdd
+            }
+            Some(emit_binary_op(builder, op, l, r))
+          },
+          _ -> None
+        }
+      else
+        None
+      end
+    },
+    "call" -> {
+      if node.children.length() > 0 then
+        let func_node = node.children[0]
+        let func_name = func_node.name
+
+        let args = Array[String]()
+        for i in 1:node.children.length() do
+          match build_ir_from_node(node.children[i], builder) {
+            Some(arg) -> args.push(arg),
+            None -> {}
+          }
+        end
+
+        Some(emit_call(builder, func_name, args))
+      else
+        None
+      end
+    },
+    "let" -> {
+      let var_name = node.name
+      if node.children.length() > 0 then
+        match build_ir_from_node(node.children[0], builder) {
+          Some(value) -> {
+            emit_store_var(builder, var_name, value)
+            Some(value)
+          },
+          None -> None
+        }
+      else
+        None
+      end
+    },
+    "if" -> {
+      if node.children.length() >= 1 then
+        match build_ir_from_node(node.children[0], builder) {
+          Some(cond) -> {
+            let true_label = new_label(builder)
+            let false_label = new_label(builder)
+            let end_label = new_label(builder)
+
+            emit_cond_jmp(builder, cond, true_label, false_label)
+
+            # true 브랜치
+            begin_block(builder, true_label)
+            if node.children.length() > 1 then
+              build_ir_from_node(node.children[1], builder)
+            end
+            emit_jmp(builder, end_label)
+
+            # false 브랜치
+            begin_block(builder, false_label)
+            if node.children.length() > 2 then
+              build_ir_from_node(node.children[2], builder)
+            end
+            emit_jmp(builder, end_label)
+
+            # end 블록
+            begin_block(builder, end_label)
+            Some("")
+          },
+          None -> None
+        }
+      else
+        None
+      end
+    },
+    "return" -> {
+      let value = if node.children.length() > 0 then
+        build_ir_from_node(node.children[0], builder)
+      else
+        None
+      end
+      emit_return(builder, value)
+      value
+    },
+    _ -> None
+  }
+
+# ==========================================
+# IR 빌더 초기화
+# ==========================================
+
+function new_ir_builder(): IRBuilder =
+  let entry_block = BasicBlock {
+    label: "entry",
+    instructions: [],
+    successors: []
+  }
+
+  IRBuilder {
+    current_block: entry_block,
+    blocks: [entry_block],
+    label_counter: 0,
+    var_counter: 0,
+    current_function: ""
+  }
+
+# ==========================================
+# IR 빌더 공개 API
+# ==========================================
+
+function build_ir(program: ASTNode): IRModule =
+  let builder = new_ir_builder()
+  let functions = Array[IRFunction]()
+
+  for node in program.children do
+    if node.type == "function" then
+      let func_name = node.name
+      builder.current_function = func_name
+
+      let entry = BasicBlock {
+        label: "entry",
+        instructions: [],
+        successors: []
+      }
+      builder.current_block = entry
+      builder.blocks = [entry]
+
+      # 함수 본문 빌드
+      for child in node.children do
+        build_ir_from_node(child, builder)
+      end
+
+      let ir_func = IRFunction {
+        name: func_name,
+        params: [],
+        return_type: "Any",
+        blocks: builder.blocks,
+        entry_block: "entry"
+      }
+      functions.push(ir_func)
+    end
+  end
+
+  IRModule {
+    functions: functions,
+    globals: []
+  }

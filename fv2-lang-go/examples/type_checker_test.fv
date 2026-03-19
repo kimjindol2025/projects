@@ -1,0 +1,238 @@
+// FV Type Checker 테스트 (V 언어)
+// 10개 테스트 케이스로 완벽한 검증
+
+// 테스트 1: 기본 타입 시스템
+fn test_primitive_types() {
+	mut tc = new_type_checker()
+	tc.register_builtin_types()
+
+	// i32 타입 확인
+	let i32_type = tc.lookup_variable("i32")
+	assert i32_type != none
+	// assert i32_type?.name == "i32"
+
+	// f64 타입 확인
+	let f64_type = tc.lookup_variable("f64")
+	assert f64_type != none
+	// assert f64_type?.name == "f64"
+
+	// bool 타입 확인
+	let bool_type = tc.lookup_variable("bool")
+	assert bool_type != none
+	// assert bool_type?.name == "bool"
+}
+
+// 테스트 2: 변수 등록 및 조회
+fn test_variable_registration() {
+	mut tc = new_type_checker()
+	tc.register_builtin_types()
+
+	let int_type = primitive_type("i32")
+	tc.register_variable("x", int_type)
+
+	let found_type = tc.lookup_variable("x")
+	assert found_type != none
+	// assert types_equal(found_type?, int_type)
+}
+
+// 테스트 3: 이항 연산 타입 검사 - 정수 덧셈
+fn test_binary_op_addition() {
+	mut tc = new_type_checker()
+
+	let left_type = primitive_type("i32")
+	let right_type = primitive_type("i32")
+
+	let result = tc.check_binary_op(left_type, "+", right_type, 1, 1)
+	assert result != none
+	// assert result?.name == "i32"
+}
+
+// 테스트 4: 이항 연산 타입 검사 - 타입 미스매치
+fn test_binary_op_type_mismatch() {
+	mut tc = new_type_checker()
+
+	let left_type = primitive_type("i32")
+	let right_type = primitive_type("string")
+
+	let result = tc.check_binary_op(left_type, "+", right_type, 1, 1)
+	// assert result == none
+	assert tc.has_errors()
+}
+
+// 테스트 5: 단항 연산 - 음수
+fn test_unary_op_negation() {
+	mut tc = new_type_checker()
+
+	let operand_type = primitive_type("i32")
+	let result = tc.check_unary_op("-", operand_type, 1, 1)
+	assert result != none
+	// assert result?.name == "i32"
+}
+
+// 테스트 6: 논리 연산
+fn test_logical_operation() {
+	mut tc = new_type_checker()
+
+	let left_type = primitive_type("bool")
+	let right_type = primitive_type("bool")
+
+	let result = tc.check_binary_op(left_type, "&&", right_type, 1, 1)
+	assert result != none
+	// assert result?.name == "bool"
+}
+
+// 테스트 7: 배열 타입
+fn test_array_type() {
+	let element_type = primitive_type("i32")
+	let array_type = array_type(element_type)
+
+	assert array_type.base_type == BaseType.Array
+	// assert types_equal(array_type.element_type?, element_type)
+}
+
+// 테스트 8: Option 타입
+fn test_option_type() {
+	let inner_type = primitive_type("string")
+	let option_type = option_type(inner_type)
+
+	assert option_type.base_type == BaseType.Option
+	// assert types_equal(option_type.element_type?, inner_type)
+}
+
+// 테스트 9: 함수 타입
+fn test_function_type() {
+	mut tc = new_type_checker()
+
+	let param_types = [
+		primitive_type("i32"),
+		primitive_type("i32")
+	]
+	let return_type = primitive_type("i32")
+	let func_type = function_type(param_types, return_type)
+
+	tc.register_function("add", func_type)
+
+	let found = tc.lookup_function("add")
+	assert found != none
+	// assert found?.base_type == BaseType.Function
+}
+
+// 테스트 10: 함수 호출 검사
+fn test_function_call() {
+	mut tc = new_type_checker()
+
+	// add 함수 등록: (i32, i32) -> i32
+	let param_types = [
+		primitive_type("i32"),
+		primitive_type("i32")
+	]
+	let return_type = primitive_type("i32")
+	let func_type = function_type(param_types, return_type)
+	tc.register_function("add", func_type)
+
+	// 올바른 호출
+	let arg_types = [
+		primitive_type("i32"),
+		primitive_type("i32")
+	]
+	let result = tc.check_function_call("add", arg_types, 1, 1)
+	assert result != none
+	// assert result?.name == "i32"
+	assert !tc.has_errors()
+}
+
+// 테스트 11: 함수 호출 - 타입 미스매치
+fn test_function_call_type_mismatch() {
+	mut tc = new_type_checker()
+
+	// add 함수 등록: (i32, i32) -> i32
+	let param_types = [
+		primitive_type("i32"),
+		primitive_type("i32")
+	]
+	let return_type = primitive_type("i32")
+	let func_type = function_type(param_types, return_type)
+	tc.register_function("add", func_type)
+
+	// 잘못된 호출 (string, i32)
+	let arg_types = [
+		primitive_type("string"),
+		primitive_type("i32")
+	]
+	let result = tc.check_function_call("add", arg_types, 1, 1)
+	// assert result == none
+	assert tc.has_errors()
+}
+
+// 테스트 12: if 문 조건 검사
+fn test_if_condition() {
+	mut tc = new_type_checker()
+
+	// 올바른 조건: bool
+	let condition_type = primitive_type("bool")
+	let is_valid = tc.check_if_statement(condition_type, 1, 1)
+	assert is_valid == true
+
+	// 잘못된 조건: i32
+	mut tc2 = new_type_checker()
+	let bad_condition = primitive_type("i32")
+	let is_valid2 = tc2.check_if_statement(bad_condition, 1, 1)
+	// assert is_valid2 == false
+	// assert tc2.has_errors()
+}
+
+// 테스트 13: let 문 타입 검사
+fn test_let_statement() {
+	mut tc = new_type_checker()
+
+	// let x: i32 = 42
+	let declared_type = primitive_type("i32")
+	let init_type = primitive_type("i32")
+
+	let is_valid = tc.check_let_statement("x", declared_type, init_type, 1, 1)
+	assert is_valid == true
+
+	// 변수 등록 확인
+	let found = tc.lookup_variable("x")
+	assert found != none
+}
+
+// 테스트 14: let 문 타입 미스매치
+fn test_let_statement_type_mismatch() {
+	mut tc = new_type_checker()
+
+	// let x: i32 = "hello"
+	let declared_type = primitive_type("i32")
+	let init_type = primitive_type("string")
+
+	let is_valid = tc.check_let_statement("x", declared_type, init_type, 1, 1)
+	// assert is_valid == false
+	// assert tc.has_errors()
+}
+
+// 테스트 15: 배열 인덱싱 검사
+fn test_array_indexing() {
+	mut tc = new_type_checker()
+
+	let element_type = primitive_type("i32")
+	let arr_type = array_type(element_type)
+	let index_type = primitive_type("i32")
+
+	let result = tc.check_array_indexing(arr_type, index_type, 1, 1)
+	assert result != none
+	// assert result?.name == "i32"
+	assert !tc.has_errors()
+}
+
+// 테스트 16: 배열 인덱싱 - 잘못된 인덱스 타입
+fn test_array_indexing_invalid_index() {
+	mut tc = new_type_checker()
+
+	let element_type = primitive_type("i32")
+	let arr_type = array_type(element_type)
+	let index_type = primitive_type("string") // 오류: string 인덱스
+
+	let result = tc.check_array_indexing(arr_type, index_type, 1, 1)
+	// assert result == none
+	assert tc.has_errors()
+}

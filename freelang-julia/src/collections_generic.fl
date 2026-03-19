@@ -1,0 +1,523 @@
+# ==========================================
+# Phase G Task G.2: Generic Collections
+# (모든 타입을 지원하는 Collections)
+# ==========================================
+# Polymorphic Collections Implementation
+#
+# FreeJulia의 제너릭 제약으로 인해, 여러 구체적 구현을 제공합니다:
+# - Dictionary[String, String]
+# - Dictionary[String, Int]
+# - Dictionary[Int, String]
+# - Set[String]
+# - Set[Int]
+# - Array[String]
+# - Array[Int]
+
+# ==========================================
+# 기본 타입 정의
+# ==========================================
+
+# Key-Value 쌍 (String keys, String values)
+record KeyValueStr =
+  key: String
+  value: String
+
+# Key-Value 쌍 (String keys, Int values)
+record KeyValueStrInt =
+  key: String
+  value: Int
+
+# Key-Value 쌍 (Int keys, String values)
+record KeyValueIntStr =
+  key: Int
+  value: String
+
+# Key-Value 쌍 (Int keys, Int values)
+record KeyValueIntInt =
+  key: Int
+  value: Int
+
+# ==========================================
+# Dictionary[String, String] (개선판)
+# ==========================================
+
+record DictionaryStrStr =
+  entries: Array[KeyValueStr]
+  size: Int
+
+function new_dict_str_str(): DictionaryStrStr =
+  DictionaryStrStr {
+    entries: [],
+    size: 0
+  }
+
+function dict_str_str_set(dict: DictionaryStrStr, key: String, value: String): Void =
+  for i in 0:dict.entries.length() do
+    if dict.entries[i].key == key then
+      dict.entries[i].value = value
+      return
+    end
+  end
+
+  dict.entries.push(KeyValueStr {
+    key: key,
+    value: value
+  })
+  dict.size = dict.size + 1
+
+function dict_str_str_get(dict: DictionaryStrStr, key: String): Option[String] =
+  for entry in dict.entries do
+    if entry.key == key then
+      return Some(entry.value)
+    end
+  end
+  None
+
+function dict_str_str_contains(dict: DictionaryStrStr, key: String): Bool =
+  match dict_str_str_get(dict, key) {
+    Some(_) -> true,
+    None -> false
+  }
+
+function dict_str_str_remove(dict: DictionaryStrStr, key: String): Option[String] =
+  for i in 0:dict.entries.length() do
+    if dict.entries[i].key == key then
+      let value = dict.entries[i].value
+      dict.size = dict.size - 1
+      return Some(value)
+    end
+  end
+  None
+
+function dict_str_str_clear(dict: DictionaryStrStr): Void =
+  dict.entries = Array[KeyValueStr]()
+  dict.size = 0
+
+function dict_str_str_keys(dict: DictionaryStrStr): Array[String] =
+  let keys = Array[String]()
+  for entry in dict.entries do
+    keys.push(entry.key)
+  end
+  keys
+
+function dict_str_str_values(dict: DictionaryStrStr): Array[String] =
+  let values = Array[String]()
+  for entry in dict.entries do
+    values.push(entry.value)
+  end
+  values
+
+function dict_str_str_size(dict: DictionaryStrStr): Int =
+  dict.size
+
+# ==========================================
+# Dictionary[String, Int]
+# ==========================================
+
+record DictionaryStrInt =
+  entries: Array[KeyValueStrInt]
+  size: Int
+
+function new_dict_str_int(): DictionaryStrInt =
+  DictionaryStrInt {
+    entries: [],
+    size: 0
+  }
+
+function dict_str_int_set(dict: DictionaryStrInt, key: String, value: Int): Void =
+  for i in 0:dict.entries.length() do
+    if dict.entries[i].key == key then
+      dict.entries[i].value = value
+      return
+    end
+  end
+
+  dict.entries.push(KeyValueStrInt {
+    key: key,
+    value: value
+  })
+  dict.size = dict.size + 1
+
+function dict_str_int_get(dict: DictionaryStrInt, key: String): Option[Int] =
+  for entry in dict.entries do
+    if entry.key == key then
+      return Some(entry.value)
+    end
+  end
+  None
+
+function dict_str_int_contains(dict: DictionaryStrInt, key: String): Bool =
+  match dict_str_int_get(dict, key) {
+    Some(_) -> true,
+    None -> false
+  }
+
+function dict_str_int_remove(dict: DictionaryStrInt, key: String): Option[Int] =
+  for i in 0:dict.entries.length() do
+    if dict.entries[i].key == key then
+      let value = dict.entries[i].value
+      dict.size = dict.size - 1
+      return Some(value)
+    end
+  end
+  None
+
+function dict_str_int_clear(dict: DictionaryStrInt): Void =
+  dict.entries = Array[KeyValueStrInt]()
+  dict.size = 0
+
+function dict_str_int_keys(dict: DictionaryStrInt): Array[String] =
+  let keys = Array[String]()
+  for entry in dict.entries do
+    keys.push(entry.key)
+  end
+  keys
+
+function dict_str_int_values(dict: DictionaryStrInt): Array[Int] =
+  let values = Array[Int]()
+  for entry in dict.entries do
+    values.push(entry.value)
+  end
+  values
+
+function dict_str_int_size(dict: DictionaryStrInt): Int =
+  dict.size
+
+# ==========================================
+# Set[String]
+# ==========================================
+
+record SetStr =
+  elements: Array[String]
+  size: Int
+
+function new_set_str(): SetStr =
+  SetStr {
+    elements: [],
+    size: 0
+  }
+
+function set_str_add(set: SetStr, element: String): Void =
+  for e in set.elements do
+    if e == element then
+      return
+    end
+  end
+
+  set.elements.push(element)
+  set.size = set.size + 1
+
+function set_str_contains(set: SetStr, element: String): Bool =
+  for e in set.elements do
+    if e == element then
+      return true
+    end
+  end
+  false
+
+function set_str_remove(set: SetStr, element: String): Bool =
+  for i in 0:set.elements.length() do
+    if set.elements[i] == element then
+      set.size = set.size - 1
+      return true
+    end
+  end
+  false
+
+function set_str_clear(set: SetStr): Void =
+  set.elements = Array[String]()
+  set.size = 0
+
+function set_str_size(set: SetStr): Int =
+  set.size
+
+function set_str_union(set1: SetStr, set2: SetStr): SetStr =
+  let result = new_set_str()
+
+  for e in set1.elements do
+    set_str_add(result, e)
+  end
+
+  for e in set2.elements do
+    set_str_add(result, e)
+  end
+
+  result
+
+function set_str_intersection(set1: SetStr, set2: SetStr): SetStr =
+  let result = new_set_str()
+
+  for e in set1.elements do
+    if set_str_contains(set2, e) then
+      set_str_add(result, e)
+    end
+  end
+
+  result
+
+function set_str_difference(set1: SetStr, set2: SetStr): SetStr =
+  let result = new_set_str()
+
+  for e in set1.elements do
+    if not set_str_contains(set2, e) then
+      set_str_add(result, e)
+    end
+  end
+
+  result
+
+# ==========================================
+# Set[Int]
+# ==========================================
+
+record SetInt =
+  elements: Array[Int]
+  size: Int
+
+function new_set_int(): SetInt =
+  SetInt {
+    elements: [],
+    size: 0
+  }
+
+function set_int_add(set: SetInt, element: Int): Void =
+  for e in set.elements do
+    if e == element then
+      return
+    end
+  end
+
+  set.elements.push(element)
+  set.size = set.size + 1
+
+function set_int_contains(set: SetInt, element: Int): Bool =
+  for e in set.elements do
+    if e == element then
+      return true
+    end
+  end
+  false
+
+function set_int_remove(set: SetInt, element: Int): Bool =
+  for i in 0:set.elements.length() do
+    if set.elements[i] == element then
+      set.size = set.size - 1
+      return true
+    end
+  end
+  false
+
+function set_int_clear(set: SetInt): Void =
+  set.elements = Array[Int]()
+  set.size = 0
+
+function set_int_size(set: SetInt): Int =
+  set.size
+
+function set_int_union(set1: SetInt, set2: SetInt): SetInt =
+  let result = new_set_int()
+
+  for e in set1.elements do
+    set_int_add(result, e)
+  end
+
+  for e in set2.elements do
+    set_int_add(result, e)
+  end
+
+  result
+
+function set_int_intersection(set1: SetInt, set2: SetInt): SetInt =
+  let result = new_set_int()
+
+  for e in set1.elements do
+    if set_int_contains(set2, e) then
+      set_int_add(result, e)
+    end
+  end
+
+  result
+
+function set_int_difference(set1: SetInt, set2: SetInt): SetInt =
+  let result = new_set_int()
+
+  for e in set1.elements do
+    if not set_int_contains(set2, e) then
+      set_int_add(result, e)
+    end
+  end
+
+  result
+
+# ==========================================
+# Array[String] 유틸리티
+# ==========================================
+
+function array_str_sort(arr: Array[String]): Array[String] =
+  let n = arr.length()
+  for i in 0:n do
+    for j in 0:(n - i - 1) do
+      if arr[j] > arr[j + 1] then
+        let temp = arr[j]
+        arr[j] = arr[j + 1]
+        arr[j + 1] = temp
+      end
+    end
+  end
+  arr
+
+function array_str_reverse(arr: Array[String]): Array[String] =
+  let result = Array[String]()
+  for i in (arr.length() - 1):-1:(-1) do
+    result.push(arr[i])
+  end
+  result
+
+function array_str_join(arr: Array[String], separator: String): String =
+  if arr.length() == 0 then
+    return ""
+  end
+
+  let result = arr[0]
+  for i in 1:arr.length() do
+    result = result + separator + arr[i]
+  end
+  result
+
+function array_str_concat(arr1: Array[String], arr2: Array[String]): Array[String] =
+  let result = Array[String]()
+  for x in arr1 do
+    result.push(x)
+  end
+  for x in arr2 do
+    result.push(x)
+  end
+  result
+
+# ==========================================
+# Array[Int] 유틸리티
+# ==========================================
+
+function array_int_sort(arr: Array[Int]): Array[Int] =
+  let n = arr.length()
+  for i in 0:n do
+    for j in 0:(n - i - 1) do
+      if arr[j] > arr[j + 1] then
+        let temp = arr[j]
+        arr[j] = arr[j + 1]
+        arr[j + 1] = temp
+      end
+    end
+  end
+  arr
+
+function array_int_reverse(arr: Array[Int]): Array[Int] =
+  let result = Array[Int]()
+  for i in (arr.length() - 1):-1:(-1) do
+    result.push(arr[i])
+  end
+  result
+
+function array_int_sum(arr: Array[Int]): Int =
+  let sum = 0
+  for x in arr do
+    sum = sum + x
+  end
+  sum
+
+function array_int_max(arr: Array[Int]): Option[Int] =
+  if arr.length() == 0 then
+    return None
+  end
+
+  let max = arr[0]
+  for i in 1:arr.length() do
+    if arr[i] > max then
+      max = arr[i]
+    end
+  end
+  Some(max)
+
+function array_int_min(arr: Array[Int]): Option[Int] =
+  if arr.length() == 0 then
+    return None
+  end
+
+  let min = arr[0]
+  for i in 1:arr.length() do
+    if arr[i] < min then
+      min = arr[i]
+    end
+  end
+  Some(min)
+
+function array_int_concat(arr1: Array[Int], arr2: Array[Int]): Array[Int] =
+  let result = Array[Int]()
+  for x in arr1 do
+    result.push(x)
+  end
+  for x in arr2 do
+    result.push(x)
+  end
+  result
+
+# ==========================================
+# 편의 함수 (레거시 호환성)
+# ==========================================
+
+# 기본값: String 기반
+function new_dict(): DictionaryStrStr =
+  new_dict_str_str()
+
+function dict_set(dict: DictionaryStrStr, key: String, value: String): Void =
+  dict_str_str_set(dict, key, value)
+
+function dict_get(dict: DictionaryStrStr, key: String): Option[String] =
+  dict_str_str_get(dict, key)
+
+function dict_contains(dict: DictionaryStrStr, key: String): Bool =
+  dict_str_str_contains(dict, key)
+
+function dict_remove(dict: DictionaryStrStr, key: String): Option[String] =
+  dict_str_str_remove(dict, key)
+
+function dict_clear(dict: DictionaryStrStr): Void =
+  dict_str_str_clear(dict)
+
+function dict_keys(dict: DictionaryStrStr): Array[String] =
+  dict_str_str_keys(dict)
+
+function dict_values(dict: DictionaryStrStr): Array[String] =
+  dict_str_str_values(dict)
+
+function dict_size(dict: DictionaryStrStr): Int =
+  dict_str_str_size(dict)
+
+# 기본값: String 기반
+function new_set(): SetStr =
+  new_set_str()
+
+function set_add(set: SetStr, element: String): Void =
+  set_str_add(set, element)
+
+function set_contains(set: SetStr, element: String): Bool =
+  set_str_contains(set, element)
+
+function set_remove(set: SetStr, element: String): Bool =
+  set_str_remove(set, element)
+
+function set_clear(set: SetStr): Void =
+  set_str_clear(set)
+
+function set_size(set: SetStr): Int =
+  set_str_size(set)
+
+function set_union(set1: SetStr, set2: SetStr): SetStr =
+  set_str_union(set1, set2)
+
+function set_intersection(set1: SetStr, set2: SetStr): SetStr =
+  set_str_intersection(set1, set2)
+
+function set_difference(set1: SetStr, set2: SetStr): SetStr =
+  set_str_difference(set1, set2)
+

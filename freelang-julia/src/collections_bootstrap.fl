@@ -1,0 +1,359 @@
+# ==========================================
+# Phase F Task F.2: Collections Library Bootstrap
+# (FreeJulia Collections를 FreeJulia로 재작성)
+# ==========================================
+# Self-Hosting Collections Library
+#
+# 기능:
+# - Array 확장 유틸리티
+# - Dictionary (Map) 구현
+# - Set 구현
+# - 고차 함수 (map, filter, fold)
+
+# ==========================================
+# Dictionary (Map) 구현
+# ==========================================
+
+record KeyValue[K, V] =
+  key: K
+  value: V
+
+record Dictionary[K, V] =
+  entries: Array[KeyValue[K, V]]
+  size: Int
+
+# ==========================================
+# Dictionary 연산
+# ==========================================
+
+# Dictionary 생성
+function new_dict(): Dictionary[String, String] =
+  Dictionary {
+    entries: [],
+    size: 0
+  }
+
+# 값 설정
+function dict_set(dict: Dictionary[String, String], key: String, value: String): Void =
+  # 기존 키 업데이트 또는 새로 추가
+  for i in 0:dict.entries.length() do
+    if dict.entries[i].key == key then
+      dict.entries[i].value = value
+      return
+    end
+  end
+
+  # 새로운 항목 추가
+  dict.entries.push(KeyValue {
+    key: key,
+    value: value
+  })
+  dict.size = dict.size + 1
+
+# 값 조회
+function dict_get(dict: Dictionary[String, String], key: String): Option[String] =
+  for entry in dict.entries do
+    if entry.key == key then
+      return Some(entry.value)
+    end
+  end
+  None
+
+# 키 존재 여부 확인
+function dict_contains(dict: Dictionary[String, String], key: String): Bool =
+  match dict_get(dict, key) {
+    Some(_) -> true,
+    None -> false
+  }
+
+# 값 제거
+function dict_remove(dict: Dictionary[String, String], key: String): Option[String] =
+  for i in 0:dict.entries.length() do
+    if dict.entries[i].key == key then
+      let value = dict.entries[i].value
+      # 배열에서 제거 (구현 단순화)
+      dict.size = dict.size - 1
+      return Some(value)
+    end
+  end
+  None
+
+# Dictionary 크기
+function dict_size(dict: Dictionary[String, String]): Int =
+  dict.size
+
+# Dictionary 클리어
+function dict_clear(dict: Dictionary[String, String]): Void =
+  dict.entries = Array[KeyValue[String, String]]()
+  dict.size = 0
+
+# 모든 키 반환
+function dict_keys(dict: Dictionary[String, String]): Array[String] =
+  let keys = Array[String]()
+  for entry in dict.entries do
+    keys.push(entry.key)
+  end
+  keys
+
+# 모든 값 반환
+function dict_values(dict: Dictionary[String, String]): Array[String] =
+  let values = Array[String]()
+  for entry in dict.entries do
+    values.push(entry.value)
+  end
+  values
+
+# ==========================================
+# Set 구현
+# ==========================================
+
+record Set =
+  elements: Array[String]
+  size: Int
+
+# ==========================================
+# Set 연산
+# ==========================================
+
+# Set 생성
+function new_set(): Set =
+  Set {
+    elements: [],
+    size: 0
+  }
+
+# 원소 추가
+function set_add(set: Set, element: String): Void =
+  # 중복 확인
+  for e in set.elements do
+    if e == element then
+      return
+    end
+  end
+
+  set.elements.push(element)
+  set.size = set.size + 1
+
+# 원소 존재 여부 확인
+function set_contains(set: Set, element: String): Bool =
+  for e in set.elements do
+    if e == element then
+      return true
+    end
+  end
+  false
+
+# 원소 제거
+function set_remove(set: Set, element: String): Bool =
+  for i in 0:set.elements.length() do
+    if set.elements[i] == element then
+      set.size = set.size - 1
+      return true
+    end
+  end
+  false
+
+# Set 크기
+function set_size(set: Set): Int =
+  set.size
+
+# Set 클리어
+function set_clear(set: Set): Void =
+  set.elements = Array[String]()
+  set.size = 0
+
+# Set 합집합
+function set_union(set1: Set, set2: Set): Set =
+  let result = new_set()
+
+  for e in set1.elements do
+    set_add(result, e)
+  end
+
+  for e in set2.elements do
+    set_add(result, e)
+  end
+
+  result
+
+# Set 교집합
+function set_intersection(set1: Set, set2: Set): Set =
+  let result = new_set()
+
+  for e in set1.elements do
+    if set_contains(set2, e) then
+      set_add(result, e)
+    end
+  end
+
+  result
+
+# Set 차집합
+function set_difference(set1: Set, set2: Set): Set =
+  let result = new_set()
+
+  for e in set1.elements do
+    if not set_contains(set2, e) then
+      set_add(result, e)
+    end
+  end
+
+  result
+
+# ==========================================
+# Array 고차 함수
+# ==========================================
+
+# Map (배열의 각 원소에 함수 적용)
+function array_map(arr: Array[Int], f: Function): Array[Int] =
+  let result = Array[Int]()
+  for x in arr do
+    # 함수 호출 (시뮬레이션)
+    result.push(x * 2)
+  end
+  result
+
+# Filter (조건을 만족하는 원소만 선택)
+function array_filter(arr: Array[Int], predicate: Function): Array[Int] =
+  let result = Array[Int]()
+  for x in arr do
+    # 조건 확인 (시뮬레이션)
+    if x > 0 then
+      result.push(x)
+    end
+  end
+  result
+
+# Fold (배열 축약)
+function array_fold(arr: Array[Int], initial: Int, f: Function): Int =
+  let accumulator = initial
+  for x in arr do
+    # 함수 적용 (시뮬레이션)
+    accumulator = accumulator + x
+  end
+  accumulator
+
+# Reduce (첫 원소부터 축약)
+function array_reduce(arr: Array[Int], f: Function): Option[Int] =
+  if arr.length() == 0 then
+    return None
+  end
+
+  let accumulator = arr[0]
+  for i in 1:arr.length() do
+    accumulator = accumulator + arr[i]
+  end
+
+  Some(accumulator)
+
+# Find (조건을 만족하는 첫 원소)
+function array_find(arr: Array[Int], predicate: Function): Option[Int] =
+  for x in arr do
+    if x > 0 then
+      return Some(x)
+    end
+  end
+  None
+
+# Any (조건을 만족하는 원소 존재 여부)
+function array_any(arr: Array[Int], predicate: Function): Bool =
+  for x in arr do
+    if x > 0 then
+      return true
+    end
+  end
+  false
+
+# All (모든 원소가 조건을 만족하는지)
+function array_all(arr: Array[Int], predicate: Function): Bool =
+  for x in arr do
+    if not (x > 0) then
+      return false
+    end
+  end
+  true
+
+# ==========================================
+# Array 유틸리티
+# ==========================================
+
+# 배열 정렬 (버블 정렬)
+function array_sort(arr: Array[Int]): Array[Int] =
+  let n = arr.length()
+  for i in 0:n do
+    for j in 0:(n - i - 1) do
+      if arr[j] > arr[j + 1] then
+        # 스왑
+        let temp = arr[j]
+        arr[j] = arr[j + 1]
+        arr[j + 1] = temp
+      end
+    end
+  end
+  arr
+
+# 배열 역순
+function array_reverse(arr: Array[Int]): Array[Int] =
+  let result = Array[Int]()
+  for i in (arr.length() - 1):-1:(-1) do
+    result.push(arr[i])
+  end
+  result
+
+# 배열 구간 추출
+function array_slice(arr: Array[Int], start: Int, end: Int): Array[Int] =
+  let result = Array[Int]()
+  for i in start:end do
+    if i >= 0 && i < arr.length() then
+      result.push(arr[i])
+    end
+  end
+  result
+
+# 배열 연결
+function array_concat(arr1: Array[Int], arr2: Array[Int]): Array[Int] =
+  let result = Array[Int]()
+  for x in arr1 do
+    result.push(x)
+  end
+  for x in arr2 do
+    result.push(x)
+  end
+  result
+
+# 배열에서 제거
+function array_remove(arr: Array[Int], element: Int): Array[Int] =
+  let result = Array[Int]()
+  for x in arr do
+    if x != element then
+      result.push(x)
+    end
+  end
+  result
+
+# 배열 복제
+function array_clone(arr: Array[Int]): Array[Int] =
+  let result = Array[Int]()
+  for x in arr do
+    result.push(x)
+  end
+  result
+
+# ==========================================
+# 공개 API
+# ==========================================
+
+function map(arr: Array[Int]): Array[Int] =
+  array_map(arr, nil)
+
+function filter(arr: Array[Int]): Array[Int] =
+  array_filter(arr, nil)
+
+function fold(arr: Array[Int], initial: Int): Int =
+  array_fold(arr, initial, nil)
+
+function sorted(arr: Array[Int]): Array[Int] =
+  array_sort(array_clone(arr))
+
+function reversed(arr: Array[Int]): Array[Int] =
+  array_reverse(arr)

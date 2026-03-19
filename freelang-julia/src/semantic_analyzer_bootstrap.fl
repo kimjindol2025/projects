@@ -1,0 +1,384 @@
+# ==========================================
+# Phase D Task D.4: Semantic Analyzer Bootstrap
+# (FreeJulia Semantic Analyzer를 FreeJulia로 재작성)
+# ==========================================
+# Self-Hosting Semantic Analysis
+#
+# 기능:
+# - 심볼 테이블 관리
+# - 스코프 분석
+# - 사용되지 않은 변수 감지
+# - 타입 일관성 검사
+
+# ==========================================
+# 의미 분석 결과
+# ==========================================
+
+record SemanticInfo =
+  is_valid: Bool
+  symbol_table: Array[(String, FVType)]
+  unused_symbols: Array[String]
+  errors: Array[String]
+  warnings: Array[String]
+
+# ==========================================
+# 변수 사용 추적
+# ==========================================
+
+record VariableInfo =
+  name: String
+  symbol_type: FVType
+  is_mutable: Bool
+  is_used: Bool
+  declaration_line: Int
+
+record VariableScope =
+  variables: Array[VariableInfo]
+  parent: Option[VariableScope]
+
+# ==========================================
+# 의미 분석 컨텍스트
+# ==========================================
+
+record SemanticContext =
+  scopes: Array[VariableScope]
+  errors: Array[String]
+  warnings: Array[String]
+  current_function: String
+
+# ==========================================
+# 스코프 관리
+# ==========================================
+
+function new_semantic_context(): SemanticContext =
+  SemanticContext {
+    scopes: [],
+    errors: [],
+    warnings: [],
+    current_function: ""
+  }
+
+# 스코프 시작
+function enter_scope(ctx: SemanticContext): Void =
+  let parent = if ctx.scopes.length() > 0 then
+    Some(ctx.scopes[ctx.scopes.length() - 1])
+  else
+    None
+  end
+
+  let scope = VariableScope {
+    variables: [],
+    parent: parent
+  }
+  ctx.scopes.push(scope)
+
+# 스코프 종료
+function exit_scope(ctx: SemanticContext): Array[VariableInfo] =
+  if ctx.scopes.length() == 0 then return []
+
+  let scope = ctx.scopes.pop()
+  # 사용되지 않은 변수 경고
+  for var in scope.variables do
+    if not var.is_used then
+      ctx.warnings.push("Unused variable: " + var.name +
+                        " at line " + var.declaration_line.to_string())
+    end
+  end
+
+  scope.variables
+
+# 변수 선언
+function declare_variable(ctx: SemanticContext, name: String, symbol_type: FVType,
+                          is_mutable: Bool, line: Int): Void =
+  if ctx.scopes.length() == 0 then
+    enter_scope(ctx)
+  end
+
+  let scope = ctx.scopes[ctx.scopes.length() - 1]
+
+  # 중복 선언 확인
+  for var in scope.variables do
+    if var.name == name then
+      ctx.errors.push("Duplicate variable declaration: " + name + " at line " + line.to_string())
+      return
+    end
+  end
+
+  let var_info = VariableInfo {
+    name: name,
+    symbol_type: symbol_type,
+    is_mutable: is_mutable,
+    is_used: false,
+    declaration_line: line
+  }
+  scope.variables.push(var_info)
+
+# 변수 사용 표시
+function use_variable(ctx: SemanticContext, name: String, line: Int): Option[FVType] =
+  let i = ctx.scopes.length() - 1
+  loop {
+    if i < 0 then return None
+
+    let scope = ctx.scopes[i]
+    for var in scope.variables do
+      if var.name == name then
+        var.is_used = true
+        return Some(var.symbol_type)
+      end
+    end
+
+    i = i - 1
+  }
+
+# ==========================================
+# 의미 분석 함수
+# ==========================================
+
+# 노드 분석
+function analyze_node(node: ASTNode, ctx: SemanticContext): Bool =
+  match node.type {
+    "program" -> {
+      enter_scope(ctx)
+      let success = true
+      for child in node.children do
+        if not analyze_node(child, ctx) then
+          success = false
+        end
+      end
+      exit_scope(ctx)
+      success
+    },
+    "function" -> {
+      let func_name = node.name
+      let prev_func = ctx.current_function
+      ctx.current_function = func_name
+
+      enter_scope(ctx)
+
+      # 파라미터 분석
+      for param in node.children do
+        if param.type == "parameter" then
+          let param_type = type_any()
+          for (key, value) in param.properties do
+            if key == "type" then
+              param_type = match value {
+                "Int" -> type_int(),
+                "Float" -> type_float(),
+                "String" -> type_string(),
+                "Bool" -> type_bool(),
+                _ -> type_any()
+              }
+            end
+          end
+          declare_variable(ctx, param.name, param_type, false, 0)
+        end
+      end
+
+      # 함수 본문 분석
+      let success = true
+      for stmt in node.children do
+        if stmt.type != "parameter" then
+          if not analyze_node(stmt, ctx) then
+            success = false
+          end
+        end
+      end
+
+      exit_scope(ctx)
+      ctx.current_function = prev_func
+      success
+    },
+    "let" -> {
+      let var_name = node.name
+      let var_type = type_any()
+
+      # 타입 annotation 파싱
+      for (key, value) in node.properties do
+        if key == "type" then
+          var_type = match value {
+            "Int" -> type_int(),
+            "Float" -> type_float(),
+            "String" -> type_string(),
+            "Bool" -> type_bool(),
+            "Char" -> type_char(),
+            _ -> type_any()
+          }
+        end
+      end
+
+      # 초기값 분석
+      if node.children.length() > 0 then
+        if not analyze_node(node.children[0], ctx) then
+          return false
+        end
+      end
+
+      declare_variable(ctx, var_name, var_type, true, node.line)
+      true
+    },
+    "identifier" -> {
+      let ident_name = node.name
+      match use_variable(ctx, ident_name, node.line) {
+        Some(_) -> true,
+        None -> {
+          ctx.errors.push("Undefined variable: " + ident_name + " at line " + node.line.to_string())
+          false
+        }
+      }
+    },
+    "if" -> {
+      if node.children.length() >= 1 then
+        # 조건 분석
+        if not analyze_node(node.children[0], ctx) then
+          return false
+        end
+
+        # 브랜치 분석
+        for i in 1:node.children.length() do
+          enter_scope(ctx)
+          if not analyze_node(node.children[i], ctx) then
+            exit_scope(ctx)
+            return false
+          end
+          exit_scope(ctx)
+        end
+      end
+      true
+    },
+    "for" -> {
+      enter_scope(ctx)
+      let var_name = node.name
+
+      # 루프 변수 선언
+      declare_variable(ctx, var_name, type_any(), true, node.line)
+
+      # 루프 본문 분석
+      let success = true
+      for stmt in node.children do
+        if not analyze_node(stmt, ctx) then
+          success = false
+        end
+      end
+
+      exit_scope(ctx)
+      success
+    },
+    "binary" -> {
+      if node.children.length() >= 2 then
+        if not analyze_node(node.children[0], ctx) then
+          return false
+        end
+        if not analyze_node(node.children[1], ctx) then
+          return false
+        end
+      end
+      true
+    },
+    "call" -> {
+      # 함수 호출 분석
+      if node.children.length() > 0 then
+        if not analyze_node(node.children[0], ctx) then
+          return false
+        end
+
+        # 인자 분석
+        for i in 1:node.children.length() do
+          if not analyze_node(node.children[i], ctx) then
+            return false
+          end
+        end
+      end
+      true
+    },
+    "return" -> {
+      if node.children.length() > 0 then
+        if not analyze_node(node.children[0], ctx) then
+          return false
+        end
+      end
+      true
+    },
+    "block" -> {
+      enter_scope(ctx)
+      let success = true
+      for stmt in node.children do
+        if not analyze_node(stmt, ctx) then
+          success = false
+        end
+      end
+      exit_scope(ctx)
+      success
+    },
+    "struct" -> {
+      # 구조체 필드 분석
+      for field in node.children do
+        if field.type == "field" then
+          # 필드 타입 확인
+          for (key, value) in field.properties do
+            if key == "type" then
+              # 타입 검증 (생략)
+            end
+          end
+        end
+      end
+      true
+    },
+    "record" -> {
+      # record 필드 분석 (struct와 유사)
+      for field in node.children do
+        if field.type == "field" then
+          for (key, value) in field.properties do
+            if key == "type" then
+              # 타입 검증 (생략)
+            end
+          end
+        end
+      end
+      true
+    },
+    "match" -> {
+      # match 표현식 분석
+      if node.children.length() > 0 then
+        if not analyze_node(node.children[0], ctx) then
+          return false
+        end
+
+        # 패턴 분석
+        for case in node.children do
+          if case.type == "case" then
+            enter_scope(ctx)
+            if not analyze_node(case, ctx) then
+              exit_scope(ctx)
+              return false
+            end
+            exit_scope(ctx)
+          end
+        end
+      end
+      true
+    },
+    _ -> true
+  }
+
+# ==========================================
+# 의미 분석 공개 API
+# ==========================================
+
+function analyze_semantic(program: ASTNode): SemanticInfo =
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+
+  let success = analyze_node(program, ctx)
+
+  let unused = Array[String]()
+  # 사용되지 않은 변수 수집 (exit_scope에서 이미 처리됨)
+
+  exit_scope(ctx)
+
+  SemanticInfo {
+    is_valid: success && ctx.errors.length() == 0,
+    symbol_table: [],  # 나중에 수집
+    unused_symbols: unused,
+    errors: ctx.errors,
+    warnings: ctx.warnings
+  }

@@ -1,0 +1,140 @@
+# ==========================================
+# Phase D Task D.6: Code Generator Bootstrap 테스트
+# (15개 테스트 케이스)
+# ==========================================
+
+# Test 1: 코드 라인 추가
+function test_emit_line(): Bool =
+  let ctx = new_codegen_context()
+  emit_line(ctx, "int x = 42;")
+  ctx.code.length() == 1 &&
+  ctx.code[0].contains("int x = 42")
+
+# Test 2: 들여쓰기
+function test_indent(): Bool =
+  let ctx = new_codegen_context()
+  indent(ctx)
+  emit_line(ctx, "statement")
+  ctx.code[0].contains("  statement")
+
+# Test 3: 들여쓰기 감소
+function test_dedent(): Bool =
+  let ctx = new_codegen_context()
+  indent(ctx)
+  indent(ctx)
+  dedent(ctx)
+  ctx.indent_level == 1
+
+# Test 4: 타입 매핑 - Int
+function test_type_mapping_int(): Bool =
+  fv_to_c_type("Int") == "long"
+
+# Test 5: 타입 매핑 - Float
+function test_type_mapping_float(): Bool =
+  fv_to_c_type("Float") == "double"
+
+# Test 6: 타입 매핑 - String
+function test_type_mapping_string(): Bool =
+  fv_to_c_type("String") == "char*"
+
+# Test 7: 타입 매핑 - Bool
+function test_type_mapping_bool(): Bool =
+  fv_to_c_type("Bool") == "int"
+
+# Test 8: 변수 선언
+function test_emit_variable_decl(): Bool =
+  let ctx = new_codegen_context()
+  emit_variable_decl(ctx, "x", "long", Some("42"))
+  ctx.function_code.length() == 1 &&
+  ctx.function_code[0].contains("x = 42")
+
+# Test 9: 할당문
+function test_emit_assignment(): Bool =
+  let ctx = new_codegen_context()
+  emit_assignment(ctx, "x", "42")
+  ctx.function_code.length() == 1 &&
+  ctx.function_code[0].contains("x = 42")
+
+# Test 10: 함수 호출
+function test_emit_call_expr(): Bool =
+  let call = emit_call_expr("add", ["2", "3"])
+  call == "add(2, 3)"
+
+# Test 11: 이항 연산
+function test_emit_binary_expr(): Bool =
+  let expr = emit_binary_expr("2", "+", "3")
+  expr == "(2 + 3)"
+
+# Test 12: 반환문
+function test_emit_return(): Bool =
+  let ctx = new_codegen_context()
+  emit_return_statement(ctx, Some("42"))
+  ctx.function_code.length() == 1 &&
+  ctx.function_code[0].contains("return 42")
+
+# Test 13: 함수 프로토타입
+function test_emit_function_prototype(): Bool =
+  let ctx = new_codegen_context()
+  emit_function_prototype(ctx, "add", ["a", "b"], "Int")
+  ctx.header_code.length() == 1 &&
+  ctx.header_code[0].contains("long add")
+
+# Test 14: 함수 정의 시작
+function test_begin_function(): Bool =
+  let ctx = new_codegen_context()
+  begin_function(ctx, "main", [], "Nil")
+  ctx.function_code.length() == 1 &&
+  ctx.function_code[0].contains("main(void)")
+
+# Test 15: C 코드 생성
+function test_generate_c_code(): Bool =
+  let ir = IRModule {
+    functions: [],
+    globals: []
+  }
+  let code = generate_c_from_ir(ir)
+  code.contains("#include <stdio.h>") &&
+  code.contains("#include <stdlib.h>")
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_emit_line", test_emit_line()),
+    ("test_indent", test_indent()),
+    ("test_dedent", test_dedent()),
+    ("test_type_mapping_int", test_type_mapping_int()),
+    ("test_type_mapping_float", test_type_mapping_float()),
+    ("test_type_mapping_string", test_type_mapping_string()),
+    ("test_type_mapping_bool", test_type_mapping_bool()),
+    ("test_emit_variable_decl", test_emit_variable_decl()),
+    ("test_emit_assignment", test_emit_assignment()),
+    ("test_emit_call_expr", test_emit_call_expr()),
+    ("test_emit_binary_expr", test_emit_binary_expr()),
+    ("test_emit_return", test_emit_return()),
+    ("test_emit_function_prototype", test_emit_function_prototype()),
+    ("test_begin_function", test_begin_function()),
+    ("test_generate_c_code", test_generate_c_code())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Code Generator Bootstrap Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")

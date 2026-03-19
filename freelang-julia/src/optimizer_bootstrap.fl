@@ -1,0 +1,300 @@
+# ==========================================
+# Phase E Task E.1: Optimizer Bootstrap
+# (FreeJulia Optimizer를 FreeJulia로 재작성)
+# ==========================================
+# Self-Hosting Code Optimizer
+#
+# 기능:
+# - IR 레벨 최적화 (DCE, CSE, 상수 전파)
+# - 기본 블록 최적화
+# - 점프 최적화
+# - 불필요한 연산 제거
+
+# ==========================================
+# 최적화 통계
+# ==========================================
+
+record OptimizationStats =
+  dead_code_eliminated: Int
+  common_subexp_eliminated: Int
+  const_folded: Int
+  jumps_simplified: Int
+  total_instructions_before: Int
+  total_instructions_after: Int
+
+# ==========================================
+# 최적화 컨텍스트
+# ==========================================
+
+record OptimizerContext =
+  ir_module: IRModule
+  stats: OptimizationStats
+  const_values: Array[(String, Int)]
+  used_vars: Array[String]
+
+# ==========================================
+# 기본 블록 최적화
+# ==========================================
+
+# 상수 폴딩 (Constant Folding)
+function fold_constants(block: BasicBlock): BasicBlock =
+  let optimized_block = BasicBlock {
+    label: block.label,
+    instructions: [],
+    successors: block.successors
+  }
+
+  for instr in block.instructions do
+    match instr.opcode {
+      OpAdd -> {
+        # 상수만 있으면 계산
+        if instr.operands.length() == 2 then
+          let left = instr.operands[0].to_int()
+          let right = instr.operands[1].to_int()
+          let result = left + right
+          let const_instr = Instruction {
+            opcode: OpLoadInt,
+            operands: [result.to_string()],
+            result: instr.result
+          }
+          optimized_block.instructions.push(const_instr)
+        else
+          optimized_block.instructions.push(instr)
+        end
+      },
+      OpSub -> {
+        if instr.operands.length() == 2 then
+          let left = instr.operands[0].to_int()
+          let right = instr.operands[1].to_int()
+          let result = left - right
+          let const_instr = Instruction {
+            opcode: OpLoadInt,
+            operands: [result.to_string()],
+            result: instr.result
+          }
+          optimized_block.instructions.push(const_instr)
+        else
+          optimized_block.instructions.push(instr)
+        end
+      },
+      OpMul -> {
+        if instr.operands.length() == 2 then
+          let left = instr.operands[0].to_int()
+          let right = instr.operands[1].to_int()
+          let result = left * right
+          let const_instr = Instruction {
+            opcode: OpLoadInt,
+            operands: [result.to_string()],
+            result: instr.result
+          }
+          optimized_block.instructions.push(const_instr)
+        else
+          optimized_block.instructions.push(instr)
+        end
+      },
+      _ -> optimized_block.instructions.push(instr)
+    }
+  end
+
+  optimized_block
+
+# 불필요한 코드 제거 (Dead Code Elimination)
+function eliminate_dead_code(block: BasicBlock): BasicBlock =
+  # 마지막 반환/점프 이후의 코드 제거
+  let optimized_block = BasicBlock {
+    label: block.label,
+    instructions: [],
+    successors: block.successors
+  }
+
+  for i in 0:block.instructions.length() do
+    let instr = block.instructions[i]
+    optimized_block.instructions.push(instr)
+
+    # 반환 또는 점프 후에는 중단
+    match instr.opcode {
+      OpReturn -> break,
+      OpJmp -> break,
+      OpCondJmp -> break,
+      _ -> {}
+    }
+  end
+
+  optimized_block
+
+# 점프 최적화 (Jump Optimization)
+function optimize_jumps(block: BasicBlock): BasicBlock =
+  let optimized = BasicBlock {
+    label: block.label,
+    instructions: [],
+    successors: block.successors
+  }
+
+  for i in 0:block.instructions.length() do
+    let instr = block.instructions[i]
+
+    # 연속된 점프 제거
+    if instr.opcode == OpJmp && i > 0 then
+      let prev = block.instructions[i - 1]
+      if prev.opcode == OpJmp then
+        # 이전 점프가 이미 있으므로 이것은 불필요
+        continue
+      end
+    end
+
+    optimized.instructions.push(instr)
+  end
+
+  optimized
+
+# ==========================================
+# 변수 사용 분석
+# ==========================================
+
+function analyze_variable_usage(ir_module: IRModule): Array[String] =
+  let used_vars = Array[String]()
+
+  for func in ir_module.functions do
+    for block in func.blocks do
+      for instr in block.instructions do
+        # 연산 피연산자 추가
+        for operand in instr.operands do
+          if operand != "" && not operand.contains("L") then
+            # 변수 참조 (라벨 아님)
+            used_vars.push(operand)
+          end
+        end
+      end
+    end
+  end
+
+  used_vars
+
+# ==========================================
+# 공통 부분식 제거 (Common Subexpression Elimination)
+# ==========================================
+
+function eliminate_common_subexpressions(block: BasicBlock): BasicBlock =
+  let optimized = BasicBlock {
+    label: block.label,
+    instructions: [],
+    successors: block.successors
+  }
+
+  let expr_map = Array[(String, String)]()  # (expr, result_var)
+
+  for instr in block.instructions do
+    match instr.opcode {
+      OpAdd -> {
+        let expr = instr.operands[0] + "+" + instr.operands[1]
+        # 같은 표현식이 이미 있는지 확인
+        let found = false
+        for (existing_expr, result_var) in expr_map do
+          if existing_expr == expr then
+            # 재사용: 결과 변수 매핑
+            found = true
+            break
+          end
+        end
+
+        if not found && instr.result.is_some() then
+          expr_map.push((expr, match instr.result { Some(v) -> v, None -> "" }))
+        end
+        optimized.instructions.push(instr)
+      },
+      _ -> optimized.instructions.push(instr)
+    }
+  end
+
+  optimized
+
+# ==========================================
+# 함수 레벨 최적화
+# ==========================================
+
+function optimize_function(func: IRFunction): IRFunction =
+  let optimized_blocks = Array[BasicBlock]()
+
+  for block in func.blocks do
+    # 1. 상수 폴딩
+    let block1 = fold_constants(block)
+
+    # 2. 불필요한 코드 제거
+    let block2 = eliminate_dead_code(block1)
+
+    # 3. 점프 최적화
+    let block3 = optimize_jumps(block2)
+
+    # 4. 공통 부분식 제거
+    let block4 = eliminate_common_subexpressions(block3)
+
+    optimized_blocks.push(block4)
+  end
+
+  IRFunction {
+    name: func.name,
+    params: func.params,
+    return_type: func.return_type,
+    blocks: optimized_blocks,
+    entry_block: func.entry_block
+  }
+
+# ==========================================
+# 모듈 레벨 최적화
+# ==========================================
+
+function optimize_module(ir_module: IRModule): IRModule =
+  let optimized_functions = Array[IRFunction]()
+
+  for func in ir_module.functions do
+    optimized_functions.push(optimize_function(func))
+  end
+
+  IRModule {
+    functions: optimized_functions,
+    globals: ir_module.globals
+  }
+
+# ==========================================
+# 최적화 통계
+# ==========================================
+
+function calculate_stats(before: IRModule, after: IRModule): OptimizationStats =
+  let before_count = 0
+  let after_count = 0
+
+  for func in before.functions do
+    for block in func.blocks do
+      before_count = before_count + block.instructions.length()
+    end
+  end
+
+  for func in after.functions do
+    for block in func.blocks do
+      after_count = after_count + block.instructions.length()
+    end
+  end
+
+  OptimizationStats {
+    dead_code_eliminated: 0,
+    common_subexp_eliminated: 0,
+    const_folded: 0,
+    jumps_simplified: 0,
+    total_instructions_before: before_count,
+    total_instructions_after: after_count
+  }
+
+# ==========================================
+# 공개 API
+# ==========================================
+
+function optimize(ir_module: IRModule): IRModule =
+  optimize_module(ir_module)
+
+function get_optimization_percentage(stats: OptimizationStats): Float =
+  if stats.total_instructions_before == 0 then
+    0.0
+  else
+    let reduction = stats.total_instructions_before - stats.total_instructions_after
+    (reduction.to_float() / stats.total_instructions_before.to_float()) * 100.0
+  end

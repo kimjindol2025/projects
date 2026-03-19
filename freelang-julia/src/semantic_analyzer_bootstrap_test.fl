@@ -1,0 +1,213 @@
+# ==========================================
+# Phase D Task D.4: Semantic Analyzer Bootstrap 테스트
+# (15개 테스트 케이스)
+# ==========================================
+
+# Test 1: 변수 선언
+function test_declare_variable(): Bool =
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  declare_variable(ctx, "x", type_int(), true, 1)
+  ctx.scopes.length() == 1 &&
+  ctx.scopes[0].variables.length() == 1
+
+# Test 2: 변수 사용
+function test_use_variable(): Bool =
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  declare_variable(ctx, "x", type_int(), true, 1)
+  let result = use_variable(ctx, "x", 2)
+  match result {
+    Some(t) -> types_equal(t, type_int()),
+    None -> false
+  }
+
+# Test 3: 미정의 변수 감지
+function test_undefined_variable(): Bool =
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  let result = use_variable(ctx, "undefined", 1)
+  match result {
+    Some(_) -> false,
+    None -> true
+  }
+
+# Test 4: 중복 변수 선언 감지
+function test_duplicate_variable(): Bool =
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  declare_variable(ctx, "x", type_int(), true, 1)
+  declare_variable(ctx, "x", type_float(), true, 2)
+  ctx.errors.length() == 1
+
+# Test 5: 변수 사용 추적
+function test_variable_usage_tracking(): Bool =
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  declare_variable(ctx, "x", type_int(), true, 1)
+  declare_variable(ctx, "y", type_int(), true, 2)
+  use_variable(ctx, "x", 3)
+  let scope = ctx.scopes[0]
+  scope.variables[0].is_used && not scope.variables[1].is_used
+
+# Test 6: 스코프 분석 - let 바인딩
+function test_analyze_let(): Bool =
+  let node = make_node("let", "x", "")
+  add_property(node, "type", "Int")
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  let result = analyze_node(node, ctx)
+  result && ctx.scopes[0].variables.length() == 1
+
+# Test 7: 스코프 분석 - 미정의 변수
+function test_analyze_undefined_identifier(): Bool =
+  let node = make_node("identifier", "undefined", "")
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  let result = analyze_node(node, ctx)
+  not result && ctx.errors.length() > 0
+
+# Test 8: 함수 파라미터 분석
+function test_analyze_function_params(): Bool =
+  let func = make_node("function", "add", "")
+  let param1 = make_node("parameter", "a", "")
+  add_property(param1, "type", "Int")
+  let param2 = make_node("parameter", "b", "")
+  add_property(param2, "type", "Int")
+  add_child(func, param1)
+  add_child(func, param2)
+
+  let ctx = new_semantic_context()
+  let result = analyze_node(func, ctx)
+  result
+
+# Test 9: if 조건 분석
+function test_analyze_if_condition(): Bool =
+  let if_node = make_node("if", "", "")
+  let cond = make_node("literal", "bool", "true")
+  add_child(if_node, cond)
+
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  let result = analyze_node(if_node, ctx)
+  result
+
+# Test 10: for 루프 분석
+function test_analyze_for_loop(): Bool =
+  let for_node = make_node("for", "i", "")
+  let iter = make_node("literal", "int", "10")
+  add_child(for_node, iter)
+
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  let result = analyze_node(for_node, ctx)
+  result
+
+# Test 11: 이항 연산 분석
+function test_analyze_binary_op(): Bool =
+  let bin = make_node("binary", "", "")
+  add_property(bin, "operator", "+")
+  let left = make_node("literal", "int", "2")
+  let right = make_node("literal", "int", "3")
+  add_child(bin, left)
+  add_child(bin, right)
+
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  let result = analyze_node(bin, ctx)
+  result
+
+# Test 12: 함수 호출 분석
+function test_analyze_function_call(): Bool =
+  let call = make_node("call", "", "")
+  let func = make_node("identifier", "add", "")
+  let arg1 = make_node("literal", "int", "1")
+  let arg2 = make_node("literal", "int", "2")
+  add_child(call, func)
+  add_child(call, arg1)
+  add_child(call, arg2)
+
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  declare_variable(ctx, "add", type_any(), false, 1)
+  let result = analyze_node(call, ctx)
+  result
+
+# Test 13: 사용되지 않은 변수 경고
+function test_unused_variable_warning(): Bool =
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  declare_variable(ctx, "x", type_int(), true, 1)
+  # x를 사용하지 않음
+  exit_scope(ctx)
+  ctx.warnings.length() > 0
+
+# Test 14: 구조체 분석
+function test_analyze_struct(): Bool =
+  let struct = make_node("struct", "Point", "")
+  let field1 = make_node("field", "x", "")
+  add_property(field1, "type", "Float")
+  add_child(struct, field1)
+
+  let ctx = new_semantic_context()
+  enter_scope(ctx)
+  let result = analyze_node(struct, ctx)
+  result
+
+# Test 15: 전체 프로그램 분석
+function test_analyze_program(): Bool =
+  let program = make_node("program", "", "")
+  let func = make_node("function", "main", "")
+  let let_stmt = make_node("let", "x", "")
+  add_property(let_stmt, "type", "Int")
+  let lit = make_node("literal", "int", "42")
+  add_child(let_stmt, lit)
+  add_child(func, let_stmt)
+  add_child(program, func)
+
+  let ctx = new_semantic_context()
+  let result = analyze_node(program, ctx)
+  result && ctx.errors.length() == 0
+
+# ==========================================
+# 테스트 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_declare_variable", test_declare_variable()),
+    ("test_use_variable", test_use_variable()),
+    ("test_undefined_variable", test_undefined_variable()),
+    ("test_duplicate_variable", test_duplicate_variable()),
+    ("test_variable_usage_tracking", test_variable_usage_tracking()),
+    ("test_analyze_let", test_analyze_let()),
+    ("test_analyze_undefined_identifier", test_analyze_undefined_identifier()),
+    ("test_analyze_function_params", test_analyze_function_params()),
+    ("test_analyze_if_condition", test_analyze_if_condition()),
+    ("test_analyze_for_loop", test_analyze_for_loop()),
+    ("test_analyze_binary_op", test_analyze_binary_op()),
+    ("test_analyze_function_call", test_analyze_function_call()),
+    ("test_unused_variable_warning", test_unused_variable_warning()),
+    ("test_analyze_struct", test_analyze_struct()),
+    ("test_analyze_program", test_analyze_program())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Semantic Analyzer Bootstrap Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")

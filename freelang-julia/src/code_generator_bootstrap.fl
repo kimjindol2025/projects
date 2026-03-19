@@ -1,0 +1,365 @@
+# ==========================================
+# Phase D Task D.6: Code Generator Bootstrap
+# (FreeJulia Code Generator를 FreeJulia로 재작성)
+# ==========================================
+# Self-Hosting Code Generator
+#
+# 기능:
+# - IR → C 코드 변환
+# - 함수 코드 생성
+# - 타입 매핑
+# - 최적화 기본
+
+# ==========================================
+# 코드 생성 컨텍스트
+# ==========================================
+
+record CodeGenContext =
+  code: Array[String]
+  indent_level: Int
+  function_code: Array[String]
+  header_code: Array[String]
+  local_vars: Array[(String, String)]
+
+# ==========================================
+# 코드 생성 헬퍼
+# ==========================================
+
+function new_codegen_context(): CodeGenContext =
+  CodeGenContext {
+    code: [],
+    indent_level: 0,
+    function_code: [],
+    header_code: [],
+    local_vars: []
+  }
+
+# 들여쓰기 생성
+function get_indent(ctx: CodeGenContext): String =
+  let indent = ""
+  for i in 0:ctx.indent_level do
+    indent = indent + "  "
+  end
+  indent
+
+# 코드 라인 추가
+function emit_line(ctx: CodeGenContext, line: String): Void =
+  ctx.code.push(get_indent(ctx) + line)
+
+# 함수 코드 라인 추가
+function emit_function_line(ctx: CodeGenContext, line: String): Void =
+  ctx.function_code.push(get_indent(ctx) + line)
+
+# 헤더 코드 라인 추가
+function emit_header_line(ctx: CodeGenContext, line: String): Void =
+  ctx.header_code.push(line)
+
+# 들여쓰기 증가
+function indent(ctx: CodeGenContext): Void =
+  ctx.indent_level = ctx.indent_level + 1
+
+# 들여쓰기 감소
+function dedent(ctx: CodeGenContext): Void =
+  if ctx.indent_level > 0 then
+    ctx.indent_level = ctx.indent_level - 1
+  end
+
+# 지역 변수 등록
+function register_local(ctx: CodeGenContext, name: String, c_type: String): Void =
+  ctx.local_vars.push((name, c_type))
+
+# ==========================================
+# 타입 매핑
+# ==========================================
+
+function fv_to_c_type(fv_type: String): String =
+  match fv_type {
+    "Int" -> "long",
+    "Float" -> "double",
+    "String" -> "char*",
+    "Bool" -> "int",
+    "Char" -> "char",
+    "Nil" -> "void",
+    _ -> "void*"
+  }
+
+# ==========================================
+# C 코드 생성
+# ==========================================
+
+# 헤더 생성
+function emit_header(ctx: CodeGenContext): Void =
+  emit_header_line(ctx, "#include <stdio.h>")
+  emit_header_line(ctx, "#include <stdlib.h>")
+  emit_header_line(ctx, "#include <string.h>")
+  emit_header_line(ctx, "#include <math.h>")
+  emit_header_line(ctx, "")
+
+# 함수 프로토타입 생성
+function emit_function_prototype(ctx: CodeGenContext, name: String, params: Array[String],
+                                  return_type: String): Void =
+  let c_return_type = fv_to_c_type(return_type)
+  let proto = c_return_type + " " + name + "("
+
+  if params.length() == 0 then
+    proto = proto + "void"
+  else
+    for i in 0:params.length() do
+      if i > 0 then proto = proto + ", "
+      proto = proto + "void* " + params[i]
+    end
+  end
+
+  proto = proto + ");"
+  emit_header_line(ctx, proto)
+
+# 함수 정의 시작
+function begin_function(ctx: CodeGenContext, name: String, params: Array[String],
+                        return_type: String): Void =
+  let c_return_type = fv_to_c_type(return_type)
+  let func_sig = c_return_type + " " + name + "("
+
+  if params.length() == 0 then
+    func_sig = func_sig + "void"
+  else
+    for i in 0:params.length() do
+      if i > 0 then func_sig = func_sig + ", "
+      func_sig = func_sig + "void* " + params[i]
+    end
+  end
+
+  func_sig = func_sig + ") {"
+  emit_function_line(ctx, func_sig)
+  indent(ctx)
+
+# 함수 정의 종료
+function end_function(ctx: CodeGenContext): Void =
+  dedent(ctx)
+  emit_function_line(ctx, "}")
+  emit_function_line(ctx, "")
+
+# 변수 선언
+function emit_variable_decl(ctx: CodeGenContext, name: String, c_type: String,
+                           value: Option[String]): Void =
+  let decl = c_type + " " + name
+  match value {
+    Some(v) -> decl = decl + " = " + v,
+    None -> {}
+  }
+  decl = decl + ";"
+  emit_function_line(ctx, decl)
+
+# 할당문
+function emit_assignment(ctx: CodeGenContext, var_name: String, value: String): Void =
+  emit_function_line(ctx, var_name + " = " + value + ";")
+
+# 함수 호출
+function emit_call_expr(name: String, args: Array[String]): String =
+  let call = name + "("
+  for i in 0:args.length() do
+    if i > 0 then call = call + ", "
+    call = call + args[i]
+  end
+  call = call + ")"
+  call
+
+# 이항 연산
+function emit_binary_expr(left: String, op: String, right: String): String =
+  "(" + left + " " + op + " " + right + ")"
+
+# if 문
+function emit_if_statement(ctx: CodeGenContext, condition: String,
+                           then_branch: Array[String],
+                           else_branch: Option[Array[String]]): Void =
+  emit_function_line(ctx, "if (" + condition + ") {")
+  indent(ctx)
+  for line in then_branch do
+    emit_function_line(ctx, line)
+  end
+  dedent(ctx)
+
+  match else_branch {
+    Some(else_stmts) -> {
+      emit_function_line(ctx, "} else {")
+      indent(ctx)
+      for line in else_stmts do
+        emit_function_line(ctx, line)
+      end
+      dedent(ctx)
+      emit_function_line(ctx, "}")
+    },
+    None -> {
+      emit_function_line(ctx, "}")
+    }
+  }
+
+# for 루프
+function emit_for_loop(ctx: CodeGenContext, init: String, condition: String,
+                       update: String, body: Array[String]): Void =
+  emit_function_line(ctx, "for (" + init + "; " + condition + "; " + update + ") {")
+  indent(ctx)
+  for line in body do
+    emit_function_line(ctx, line)
+  end
+  dedent(ctx)
+  emit_function_line(ctx, "}")
+
+# while 루프
+function emit_while_loop(ctx: CodeGenContext, condition: String,
+                        body: Array[String]): Void =
+  emit_function_line(ctx, "while (" + condition + ") {")
+  indent(ctx)
+  for line in body do
+    emit_function_line(ctx, line)
+  end
+  dedent(ctx)
+  emit_function_line(ctx, "}")
+
+# 반환문
+function emit_return_statement(ctx: CodeGenContext, value: Option[String]): Void =
+  let ret = "return"
+  match value {
+    Some(v) -> ret = ret + " " + v,
+    None -> {}
+  }
+  ret = ret + ";"
+  emit_function_line(ctx, ret)
+
+# ==========================================
+# IR → C 코드 변환
+# ==========================================
+
+function generate_c_from_ir(ir_module: IRModule): String =
+  let ctx = new_codegen_context()
+
+  # 헤더 생성
+  emit_header(ctx)
+
+  # 함수 프로토타입 생성
+  for func in ir_module.functions do
+    emit_function_prototype(ctx, func.name, func.params, func.return_type)
+  end
+
+  emit_header_line(ctx, "")
+
+  # 함수 정의 생성
+  for func in ir_module.functions do
+    begin_function(ctx, func.name, func.params, func.return_type)
+
+    # BasicBlock 코드 생성
+    for block in func.blocks do
+      # 레이블
+      emit_function_line(ctx, block.label + ":")
+
+      # 명령어 코드 생성
+      for instr in block.instructions do
+        match instr.opcode {
+          OpLoadInt -> {
+            let var_name = match instr.result {
+              Some(v) -> v,
+              None -> "result"
+            }
+            emit_variable_decl(ctx, var_name, "long", Some(instr.operands[0]))
+          },
+          OpLoadFloat -> {
+            let var_name = match instr.result {
+              Some(v) -> v,
+              None -> "result"
+            }
+            emit_variable_decl(ctx, var_name, "double", Some(instr.operands[0]))
+          },
+          OpLoadString -> {
+            let var_name = match instr.result {
+              Some(v) -> v,
+              None -> "result"
+            }
+            emit_variable_decl(ctx, var_name, "char*", Some("\"" + instr.operands[0] + "\""))
+          },
+          OpAdd -> {
+            let result = match instr.result {
+              Some(v) -> v,
+              None -> "result"
+            }
+            let expr = emit_binary_expr(instr.operands[0], "+", instr.operands[1])
+            emit_variable_decl(ctx, result, "long", Some(expr))
+          },
+          OpSub -> {
+            let result = match instr.result {
+              Some(v) -> v,
+              None -> "result"
+            }
+            let expr = emit_binary_expr(instr.operands[0], "-", instr.operands[1])
+            emit_variable_decl(ctx, result, "long", Some(expr))
+          },
+          OpMul -> {
+            let result = match instr.result {
+              Some(v) -> v,
+              None -> "result"
+            }
+            let expr = emit_binary_expr(instr.operands[0], "*", instr.operands[1])
+            emit_variable_decl(ctx, result, "long", Some(expr))
+          },
+          OpDiv -> {
+            let result = match instr.result {
+              Some(v) -> v,
+              None -> "result"
+            }
+            let expr = emit_binary_expr(instr.operands[0], "/", instr.operands[1])
+            emit_variable_decl(ctx, result, "long", Some(expr))
+          },
+          OpCall -> {
+            let result = match instr.result {
+              Some(v) -> v,
+              None -> "result"
+            }
+            let func_name = instr.operands[0]
+            let args = Array[String]()
+            for i in 1:instr.operands.length() do
+              args.push(instr.operands[i])
+            end
+            let call_expr = emit_call_expr(func_name, args)
+            emit_assignment(ctx, result, call_expr)
+          },
+          OpReturn -> {
+            let value = if instr.operands.length() > 0 then
+              Some(instr.operands[0])
+            else
+              None
+            end
+            emit_return_statement(ctx, value)
+          },
+          OpLoadVar -> {
+            let result = match instr.result {
+              Some(v) -> v,
+              None -> "result"
+            }
+            emit_assignment(ctx, result, instr.operands[0])
+          },
+          OpStoreVar -> {
+            emit_assignment(ctx, instr.operands[0], instr.operands[1])
+          },
+          _ -> {}
+        }
+      end
+    end
+
+    end_function(ctx)
+  end
+
+  # 모든 코드 합치기
+  let final_code = ""
+  for line in ctx.header_code do
+    final_code = final_code + line + "\n"
+  end
+  for line in ctx.function_code do
+    final_code = final_code + line + "\n"
+  end
+
+  final_code
+
+# ==========================================
+# 코드 생성 공개 API
+# ==========================================
+
+function generate_code(ir_module: IRModule): String =
+  generate_c_from_ir(ir_module)

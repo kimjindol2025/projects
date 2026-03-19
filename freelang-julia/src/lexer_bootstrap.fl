@@ -1,0 +1,405 @@
+# ==========================================
+# Phase D Task D.1: FreeJulia Lexer Bootstrap
+# (FreeJulia Lexer를 FreeJulia로 재작성)
+# ==========================================
+# 이 파일은 FreeJulia 컴파일러의 Lexer을
+# FreeJulia 언어로 재작성한 것입니다.
+#
+# 목표: 자기-호스팅 (Self-Hosting)
+# - FreeJulia로 FreeJulia를 컴파일할 수 있도록 함
+#
+# 기능:
+# - 문자 읽기 및 토크나이제이션
+# - 50+ 토큰 타입 지원
+# - 라인/열 추적
+# - 주석 처리 (라인, 블록)
+# - 키워드 인식
+
+# ==========================================
+# 토큰 타입 정의
+# ==========================================
+
+record TokenType =
+  | INT
+  | FLOAT
+  | STRING
+  | CHAR
+  | BOOL
+  | NIL
+  | IDENT
+  | PLUS
+  | MINUS
+  | MULTIPLY
+  | DIVIDE
+  | MODULO
+  | POWER
+  | ASSIGN
+  | PLUS_ASSIGN
+  | MINUS_ASSIGN
+  | MULTIPLY_ASSIGN
+  | DIVIDE_ASSIGN
+  | EQ
+  | NEQ
+  | LT
+  | LE
+  | GT
+  | GE
+  | AND
+  | OR
+  | NOT
+  | LPAREN
+  | RPAREN
+  | LBRACE
+  | RBRACE
+  | LBRACKET
+  | RBRACKET
+  | SEMICOLON
+  | COMMA
+  | DOT
+  | COLON
+  | ARROW
+  | FAT_ARROW
+  | AMPERSAND
+  | PIPE
+  | CARET
+  | TILDE
+  | QUESTION
+  | KEYWORD_LET
+  | KEYWORD_FN
+  | KEYWORD_RETURN
+  | KEYWORD_IF
+  | KEYWORD_ELSE
+  | KEYWORD_FOR
+  | KEYWORD_WHILE
+  | KEYWORD_BREAK
+  | KEYWORD_CONTINUE
+  | KEYWORD_STRUCT
+  | KEYWORD_ENUM
+  | KEYWORD_INTERFACE
+  | KEYWORD_MATCH
+  | KEYWORD_IMPORT
+  | KEYWORD_EXPORT
+  | KEYWORD_RECORD
+  | KEYWORD_TYPE
+  | EOF_TOKEN
+  | NEWLINE
+  | COMMENT
+
+# ==========================================
+# Token 구조체
+# ==========================================
+
+record Token =
+  type: TokenType
+  value: String
+  line: Int
+  column: Int
+
+# ==========================================
+# Lexer 구조체
+# ==========================================
+
+record Lexer =
+  input: String
+  position: Int
+  read_position: Int
+  ch: Char
+  line: Int
+  column: Int
+  tokens: Array[Token]
+
+# ==========================================
+# 헬퍼 함수
+# ==========================================
+
+# Lexer 초기화
+function new_lexer(input: String): Lexer =
+  let lexer = Lexer {
+    input: input,
+    position: 0,
+    read_position: 1,
+    ch: if input.length() > 0 then input[0] else '\0',
+    line: 1,
+    column: 1,
+    tokens: []
+  }
+  lexer
+
+# 다음 문자 읽기
+function read_char(lexer: Lexer): Void =
+  if lexer.read_position >= lexer.input.length() then
+    lexer.ch = '\0'
+  else
+    lexer.ch = lexer.input[lexer.read_position]
+  end
+  lexer.position = lexer.read_position
+  lexer.read_position = lexer.read_position + 1
+  if lexer.ch == '\n' then
+    lexer.line = lexer.line + 1
+    lexer.column = 1
+  else
+    lexer.column = lexer.column + 1
+  end
+
+# 현재 문자 보기 (읽지 않음)
+function peek_char(lexer: Lexer): Char =
+  if lexer.read_position >= lexer.input.length() then
+    '\0'
+  else
+    lexer.input[lexer.read_position]
+  end
+
+# 공백 건너뛰기
+function skip_whitespace(lexer: Lexer): Void =
+  while lexer.ch == ' ' or lexer.ch == '\t' or lexer.ch == '\r' do
+    read_char(lexer)
+  end
+
+# 라인 주석 건너뛰기 (//)
+function skip_line_comment(lexer: Lexer): Void =
+  while lexer.ch != '\n' and lexer.ch != '\0' do
+    read_char(lexer)
+  end
+
+# 블록 주석 건너뛰기 (/* */)
+function skip_block_comment(lexer: Lexer): Void =
+  read_char(lexer)  # skip '/'
+  read_char(lexer)  # skip '*'
+  while lexer.ch != '\0' do
+    if lexer.ch == '*' and peek_char(lexer) == '/' then
+      read_char(lexer)  # skip '*'
+      read_char(lexer)  # skip '/'
+      return
+    end
+    read_char(lexer)
+  end
+
+# 문자가 식별자 시작 문자인지 확인
+function is_ident_start(ch: Char): Bool =
+  (ch >= 'a' and ch <= 'z') or
+  (ch >= 'A' and ch <= 'Z') or
+  ch == '_'
+
+# 문자가 식별자 계속 문자인지 확인
+function is_ident_char(ch: Char): Bool =
+  is_ident_start(ch) or (ch >= '0' and ch <= '9')
+
+# 문자가 숫자인지 확인
+function is_digit(ch: Char): Bool =
+  ch >= '0' and ch <= '9'
+
+# 식별자 읽기
+function read_ident(lexer: Lexer): String =
+  let start = lexer.position
+  while is_ident_char(lexer.ch) do
+    read_char(lexer)
+  end
+  lexer.input.substring(start, lexer.position)
+
+# 숫자 읽기
+function read_number(lexer: Lexer): String =
+  let start = lexer.position
+  # 정수 부분
+  while is_digit(lexer.ch) do
+    read_char(lexer)
+  end
+  # 부동소수점 부분
+  if lexer.ch == '.' and is_digit(peek_char(lexer)) then
+    read_char(lexer)  # skip '.'
+    while is_digit(lexer.ch) do
+      read_char(lexer)
+    end
+  end
+  # 지수 부분
+  if lexer.ch == 'e' or lexer.ch == 'E' then
+    read_char(lexer)
+    if lexer.ch == '+' or lexer.ch == '-' then
+      read_char(lexer)
+    end
+    while is_digit(lexer.ch) do
+      read_char(lexer)
+    end
+  end
+  lexer.input.substring(start, lexer.position)
+
+# 문자열 읽기
+function read_string(lexer: Lexer, quote: Char): String =
+  read_char(lexer)  # skip opening quote
+  let start = lexer.position
+  while lexer.ch != quote and lexer.ch != '\0' do
+    if lexer.ch == '\\' then
+      read_char(lexer)  # skip escape char
+    end
+    read_char(lexer)
+  end
+  let result = lexer.input.substring(start, lexer.position)
+  if lexer.ch == quote then
+    read_char(lexer)  # skip closing quote
+  end
+  result
+
+# 키워드 인식
+function lookup_ident(ident: String): TokenType =
+  match ident {
+    "let" -> KEYWORD_LET,
+    "fn" -> KEYWORD_FN,
+    "return" -> KEYWORD_RETURN,
+    "if" -> KEYWORD_IF,
+    "else" -> KEYWORD_ELSE,
+    "for" -> KEYWORD_FOR,
+    "while" -> KEYWORD_WHILE,
+    "break" -> KEYWORD_BREAK,
+    "continue" -> KEYWORD_CONTINUE,
+    "struct" -> KEYWORD_STRUCT,
+    "enum" -> KEYWORD_ENUM,
+    "interface" -> KEYWORD_INTERFACE,
+    "match" -> KEYWORD_MATCH,
+    "import" -> KEYWORD_IMPORT,
+    "export" -> KEYWORD_EXPORT,
+    "record" -> KEYWORD_RECORD,
+    "type" -> KEYWORD_TYPE,
+    "true" -> BOOL,
+    "false" -> BOOL,
+    "nil" -> NIL,
+    _ -> IDENT
+  }
+
+# 토큰 추가
+function add_token(lexer: Lexer, type_: TokenType, value: String): Void =
+  let token = Token {
+    type: type_,
+    value: value,
+    line: lexer.line,
+    column: lexer.column
+  }
+  lexer.tokens.push(token)
+
+# ==========================================
+# 메인 토크나이제이션 엔진
+# ==========================================
+
+function next_token(lexer: Lexer): Token =
+  skip_whitespace(lexer)
+
+  # 주석 처리
+  if lexer.ch == '/' and peek_char(lexer) == '/' then
+    skip_line_comment(lexer)
+    return next_token(lexer)
+  end
+  if lexer.ch == '/' and peek_char(lexer) == '*' then
+    skip_block_comment(lexer)
+    return next_token(lexer)
+  end
+
+  let token_type = match lexer.ch {
+    '+' -> {
+      read_char(lexer)
+      if lexer.ch == '=' then { read_char(lexer); PLUS_ASSIGN }
+      else PLUS
+    },
+    '-' -> {
+      read_char(lexer)
+      if lexer.ch == '=' then { read_char(lexer); MINUS_ASSIGN }
+      else if lexer.ch == '>' then { read_char(lexer); ARROW }
+      else MINUS
+    },
+    '*' -> {
+      read_char(lexer)
+      if lexer.ch == '=' then { read_char(lexer); MULTIPLY_ASSIGN }
+      else MULTIPLY
+    },
+    '/' -> {
+      read_char(lexer)
+      if lexer.ch == '=' then { read_char(lexer); DIVIDE_ASSIGN }
+      else DIVIDE
+    },
+    '%' -> { read_char(lexer); MODULO },
+    '^' -> { read_char(lexer); POWER },
+    '=' -> {
+      read_char(lexer)
+      if lexer.ch == '=' then { read_char(lexer); EQ }
+      else if lexer.ch == '>' then { read_char(lexer); FAT_ARROW }
+      else ASSIGN
+    },
+    '!' -> {
+      read_char(lexer)
+      if lexer.ch == '=' then { read_char(lexer); NEQ }
+      else NOT
+    },
+    '<' -> {
+      read_char(lexer)
+      if lexer.ch == '=' then { read_char(lexer); LE }
+      else LT
+    },
+    '>' -> {
+      read_char(lexer)
+      if lexer.ch == '=' then { read_char(lexer); GE }
+      else GT
+    },
+    '&' -> {
+      read_char(lexer)
+      if lexer.ch == '&' then { read_char(lexer); AND }
+      else AMPERSAND
+    },
+    '|' -> {
+      read_char(lexer)
+      if lexer.ch == '|' then { read_char(lexer); OR }
+      else PIPE
+    },
+    '(' -> { read_char(lexer); LPAREN },
+    ')' -> { read_char(lexer); RPAREN },
+    '{' -> { read_char(lexer); LBRACE },
+    '}' -> { read_char(lexer); RBRACE },
+    '[' -> { read_char(lexer); LBRACKET },
+    ']' -> { read_char(lexer); RBRACKET },
+    ';' -> { read_char(lexer); SEMICOLON },
+    ',' -> { read_char(lexer); COMMA },
+    '.' -> { read_char(lexer); DOT },
+    ':' -> { read_char(lexer); COLON },
+    '~' -> { read_char(lexer); TILDE },
+    '?' -> { read_char(lexer); QUESTION },
+    '\n' -> { read_char(lexer); NEWLINE },
+    '\0' -> EOF_TOKEN,
+    _ -> {
+      if is_ident_start(lexer.ch) then {
+        let ident = read_ident(lexer)
+        lookup_ident(ident)
+      } else if is_digit(lexer.ch) then {
+        let num = read_number(lexer)
+        if num.contains(".") then FLOAT else INT
+      } else if lexer.ch == '"' then {
+        read_string(lexer, '"')
+        STRING
+      } else if lexer.ch == '\'' then {
+        read_string(lexer, '\'')
+        CHAR
+      } else {
+        read_char(lexer)
+        COMMENT  # 인식되지 않은 문자
+      }
+    }
+  }
+
+  Token {
+    type: token_type,
+    value: if token_type == INT or token_type == FLOAT or token_type == STRING or token_type == CHAR
+           then (if is_ident_start(lexer.input[lexer.position])
+                 then read_ident(lexer)
+                 else "")
+           else "",
+    line: lexer.line,
+    column: lexer.column
+  }
+
+# 전체 토크나이제이션
+function tokenize(input: String): Array[Token] =
+  let lexer = new_lexer(input)
+  let tokens: Array[Token] = []
+
+  loop {
+    let token = next_token(lexer)
+    tokens.push(token)
+    if token.type == EOF_TOKEN then break
+  }
+
+  tokens

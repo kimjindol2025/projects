@@ -25,7 +25,7 @@ func New(tokens []lexer.Token) *Parser {
 	}
 }
 
-// Parse parses tokens into an AST
+// Parse parses tokens into an AST (with error recovery)
 func (p *Parser) Parse() (*ast.Program, error) {
 	var definitions []ast.Definition
 	var mainBody []ast.Statement
@@ -38,7 +38,9 @@ func (p *Parser) Parse() (*ast.Program, error) {
 		if p.check(lexer.TknFn) {
 			def, err := p.parseFunctionDef()
 			if err != nil {
-				return nil, err
+				p.errors = append(p.errors, err.Error())
+				p.synchronize() // Error recovery: skip to next definition
+				continue
 			}
 			if def != nil {
 				definitions = append(definitions, def)
@@ -46,7 +48,9 @@ func (p *Parser) Parse() (*ast.Program, error) {
 		} else if p.check(lexer.TknType) {
 			def, err := p.parseTypeDef()
 			if err != nil {
-				return nil, err
+				p.errors = append(p.errors, err.Error())
+				p.synchronize() // Error recovery
+				continue
 			}
 			if def != nil {
 				definitions = append(definitions, def)
@@ -54,7 +58,9 @@ func (p *Parser) Parse() (*ast.Program, error) {
 		} else if p.check(lexer.TknStruct) {
 			def, err := p.parseStructDef()
 			if err != nil {
-				return nil, err
+				p.errors = append(p.errors, err.Error())
+				p.synchronize() // Error recovery
+				continue
 			}
 			if def != nil {
 				definitions = append(definitions, def)
@@ -62,12 +68,22 @@ func (p *Parser) Parse() (*ast.Program, error) {
 		} else {
 			stmt, err := p.parseStatement()
 			if err != nil {
-				return nil, err
+				p.errors = append(p.errors, err.Error())
+				p.synchronize() // Error recovery
+				continue
 			}
 			if stmt != nil {
 				mainBody = append(mainBody, stmt)
 			}
 		}
+	}
+
+	// Return program even if there are errors (for partial parsing)
+	if len(p.errors) > 0 {
+		return &ast.Program{
+			Definitions: definitions,
+			MainBody:    mainBody,
+		}, fmt.Errorf("parse errors: %v", p.errors)
 	}
 
 	return &ast.Program{
@@ -1002,4 +1018,32 @@ func isPrimitiveType(name string) bool {
 		return true
 	}
 	return false
+}
+
+// synchronize skips tokens until we find a recovery point
+// Used for error recovery to continue parsing after an error
+func (p *Parser) synchronize() {
+	p.advance()
+
+	for !p.isAtEnd() {
+		// Stop at definition keywords
+		if p.check(lexer.TknFn) || p.check(lexer.TknType) || p.check(lexer.TknStruct) ||
+			p.check(lexer.TknInterface) || p.check(lexer.TknEnum) {
+			return
+		}
+
+		// Stop at statement keywords
+		if p.check(lexer.TknLet) || p.check(lexer.TknConst) || p.check(lexer.TknIf) ||
+			p.check(lexer.TknFor) || p.check(lexer.TknReturn) || p.check(lexer.TknMatch) {
+			return
+		}
+
+		// Stop at block boundaries
+		if p.check(lexer.TknRBrace) {
+			p.advance()
+			return
+		}
+
+		p.advance()
+	}
 }
