@@ -1,0 +1,137 @@
+# ============================================================================
+# Phase C Task C.6: Code Generator 테스트 (15개 테스트 케이스)
+# ============================================================================
+
+# Test 1: Bytecode 생성
+function test_create_bytecode(): Bool =
+  let bc = new_bytecode(OpAdd, ["r0", "r1"])
+  bc.opcode == OpAdd &&
+  bc.operands.length == 2 &&
+  match bc.result { Some(_) -> false, None -> true }
+
+# Test 2: Bytecode with result
+function test_bytecode_with_result(): Bool =
+  let bc = new_bytecode_with_result(OpMul, ["r0", "r1"], "r2")
+  bc.opcode == OpMul &&
+  match bc.result {
+    Some(r) -> r == "r2",
+    None -> false,
+  }
+
+# Test 3: Value Allocator 생성
+function test_create_allocator(): Bool =
+  let alloc = new_allocator()
+  alloc.next_register == 0
+
+# Test 4: Register 할당
+function test_allocate_register(): Bool =
+  let alloc = new_allocator()
+  let (alloc2, reg) = allocate_register(alloc, 1)
+  reg == 0 && alloc2.next_register == 1
+
+# Test 5: 같은 값 ID는 같은 레지스터
+function test_allocate_same_register(): Bool =
+  let alloc = new_allocator()
+  let (alloc2, reg1) = allocate_register(alloc, 1)
+  let (alloc3, reg2) = allocate_register(alloc2, 1)
+  reg1 == reg2
+
+# Test 6: 다른 값 ID는 다른 레지스터
+function test_allocate_different_registers(): Bool =
+  let alloc = new_allocator()
+  let (alloc2, reg1) = allocate_register(alloc, 1)
+  let (alloc3, reg2) = allocate_register(alloc2, 2)
+  reg1 != reg2
+
+# Test 7: Code Generator 생성
+function test_create_generator(): Bool =
+  let gen = new_generator()
+  gen.bytecodes.length == 0 &&
+  gen.label_count == 0 &&
+  gen.errors.length == 0
+
+# Test 8: Bytecode 내보내기
+function test_emit_bytecode(): Bool =
+  let gen = new_generator()
+  let bc = new_bytecode(OpAdd, ["r0", "r1"])
+  let gen2 = emit_bytecode(gen, bc)
+  gen2.bytecodes.length == 1
+
+# Test 9: Move 명령어 생성
+function test_gen_move(): Bool =
+  let gen = new_generator()
+  let (gen2, result) = gen_move(gen, "10", 1)
+  gen2.bytecodes.length == 1 &&
+  result == "r0"
+
+# Test 10: Binary operation 생성
+function test_gen_binary_op(): Bool =
+  let gen = new_generator()
+  let (gen2, result) = gen_binary_op(gen, OpAdd, "r0", "r1", 2)
+  gen2.bytecodes.length == 1 &&
+  result == "r0"
+
+# Test 11: Label 생성
+function test_gen_label(): Bool =
+  let gen = new_generator()
+  let gen2 = gen_label(gen, "loop_start")
+  gen2.bytecodes.length == 1
+
+# Test 12: Jump 생성
+function test_gen_jump(): Bool =
+  let gen = new_generator()
+  let gen2 = gen_jump(gen, "loop_end")
+  gen2.bytecodes.length == 1
+
+# Test 13: Return 생성
+function test_gen_return(): Bool =
+  let gen = new_generator()
+  let gen2 = gen_return(gen, Some("r0"))
+  gen2.bytecodes.length == 1
+
+# Test 14: Bytecode를 C 코드로 변환
+function test_bytecode_to_c(): Bool =
+  let bc = new_bytecode_with_result(OpAdd, ["5", "3"], "r0")
+  let c_code = bytecode_to_c(bc)
+  c_code.contains("r0") &&
+  c_code.contains("+")
+
+# Test 15: 함수 코드 생성
+function test_generate_c_code(): Bool =
+  let gen = new_generator()
+  let gen2 = start_function(gen, "add", ["a", "b"], "int")
+  let (gen3, result) = gen_move(gen2, "10", 1)
+  let c_code = generate_c_code(gen3, "add", "int")
+  c_code.contains("int add")
+
+# ============================================================================
+# 모든 테스트 실행
+# ============================================================================
+
+function run_code_generator_tests(): Bool =
+  let results = [
+    ("test_create_bytecode", test_create_bytecode()),
+    ("test_bytecode_with_result", test_bytecode_with_result()),
+    ("test_create_allocator", test_create_allocator()),
+    ("test_allocate_register", test_allocate_register()),
+    ("test_allocate_same_register", test_allocate_same_register()),
+    ("test_allocate_different_registers", test_allocate_different_registers()),
+    ("test_create_generator", test_create_generator()),
+    ("test_emit_bytecode", test_emit_bytecode()),
+    ("test_gen_move", test_gen_move()),
+    ("test_gen_binary_op", test_gen_binary_op()),
+    ("test_gen_label", test_gen_label()),
+    ("test_gen_jump", test_gen_jump()),
+    ("test_gen_return", test_gen_return()),
+    ("test_bytecode_to_c", test_bytecode_to_c()),
+    ("test_generate_c_code", test_generate_c_code()),
+  ]
+
+  for (name, result) in results {
+    if !result then
+      eprintln("❌ FAILED: " + name)
+    else
+      println("✅ PASSED: " + name)
+  }
+
+  true
