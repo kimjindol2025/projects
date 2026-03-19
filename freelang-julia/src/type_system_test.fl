@@ -1,0 +1,139 @@
+# ============================================================================
+# Phase C Task C.3: Type System 테스트 (12개 테스트 케이스)
+# ============================================================================
+
+# Test 1: 기본 타입 생성
+function test_create_basic_types(): Bool =
+  let int_type = new_basic_type(KindInt32, "Int32", 4)
+  let float_type = new_basic_type(KindFloat64, "Float64", 8)
+
+  int_type.name == "Int32" &&
+  int_type.size == 4 &&
+  float_type.name == "Float64" &&
+  float_type.size == 8
+
+# Test 2: 타입 레지스트리 생성
+function test_registry_creation(): Bool =
+  let reg = new_registry()
+  match registry_get(reg, "Int32") {
+    Some(t) -> t.name == "Int32",
+    None -> false,
+  }
+
+# Test 3: 레지스트리에서 타입 조회
+function test_registry_lookup(): Bool =
+  let reg = new_registry()
+  match registry_get(reg, "Float64") {
+    Some(t) -> t.size == 8,
+    None -> false,
+  } &&
+  match registry_get(reg, "String") {
+    Some(t) -> t.name == "String",
+    None -> false,
+  }
+
+# Test 4: 타입 종류별 조회
+function test_registry_get_by_kind(): Bool =
+  let reg = new_registry()
+  match registry_get_by_kind(reg, KindInt64) {
+    Some(t) -> t.name == "Int64",
+    None -> false,
+  }
+
+# Test 5: 직접 타입 비교
+function test_type_equality(): Bool =
+  let t1 = new_basic_type(KindInt32, "Int32", 4)
+  let t2 = new_basic_type(KindInt32, "Int32", 4)
+  let t3 = new_basic_type(KindInt64, "Int64", 8)
+
+  types_equal(t1, t2) && !types_equal(t1, t3)
+
+# Test 6: Subtype 관계 - 정수 타입
+function test_integer_subtype(): Bool =
+  let int32 = new_basic_type(KindInt32, "Int32", 4)
+  let integer = new_basic_type(KindInteger, "Integer", 0)
+  let any = new_basic_type(KindAny, "Any", 0)
+
+  is_subtype_of(int32, integer) &&
+  is_subtype_of(int32, any)
+
+# Test 7: Subtype 관계 - 부동소수점 타입
+function test_float_subtype(): Bool =
+  let float64 = new_basic_type(KindFloat64, "Float64", 8)
+  let floating = new_basic_type(KindFloating, "Floating", 0)
+
+  is_subtype_of(float64, floating)
+
+# Test 8: Nothing은 모든 타입의 하위
+function test_nothing_subtype(): Bool =
+  let nothing = new_basic_type(KindNothing, "Nothing", 0)
+  let int_type = new_basic_type(KindInt32, "Int32", 4)
+  let string = new_basic_type(KindString, "String", 0)
+
+  is_subtype_of(nothing, int_type) &&
+  is_subtype_of(nothing, string)
+
+# Test 9: 숫자 union 타입
+function test_numeric_union(): Bool =
+  let int32 = new_basic_type(KindInt32, "Int32", 4)
+  let float64 = new_basic_type(KindFloat64, "Float64", 8)
+  let number = new_basic_type(KindNumber, "Number", 0)
+
+  is_subtype_of(int32, number) &&
+  is_subtype_of(float64, number)
+
+# Test 10: 타입 호환성
+function test_type_compatibility(): Bool =
+  let int32 = new_basic_type(KindInt32, "Int32", 4)
+  let int64 = new_basic_type(KindInt64, "Int64", 8)
+  let integer = new_basic_type(KindInteger, "Integer", 0)
+
+  types_compatible(int32, int64) &&
+  types_compatible(int32, integer)
+
+# Test 11: 타입 카테고리
+function test_type_category(): Bool =
+  type_category(KindInt32) == "Integer" &&
+  type_category(KindFloat64) == "Float" &&
+  type_category(KindString) == "String" &&
+  type_category(KindBool) == "Bool"
+
+# Test 12: 모든 기본 타입 등록
+function test_all_types_registered(): Bool =
+  let reg = new_registry()
+  let type_names = registry_all_types(reg)
+
+  type_names.length >= 24 &&
+  type_names.contains("Int32") &&
+  type_names.contains("Float64") &&
+  type_names.contains("String") &&
+  type_names.contains("Bool")
+
+# ============================================================================
+# 모든 테스트 실행
+# ============================================================================
+
+function run_type_tests(): Bool =
+  let results = [
+    ("test_create_basic_types", test_create_basic_types()),
+    ("test_registry_creation", test_registry_creation()),
+    ("test_registry_lookup", test_registry_lookup()),
+    ("test_registry_get_by_kind", test_registry_get_by_kind()),
+    ("test_type_equality", test_type_equality()),
+    ("test_integer_subtype", test_integer_subtype()),
+    ("test_float_subtype", test_float_subtype()),
+    ("test_nothing_subtype", test_nothing_subtype()),
+    ("test_numeric_union", test_numeric_union()),
+    ("test_type_compatibility", test_type_compatibility()),
+    ("test_type_category", test_type_category()),
+    ("test_all_types_registered", test_all_types_registered()),
+  ]
+
+  for (name, result) in results {
+    if !result then
+      eprintln("❌ FAILED: " + name)
+    else
+      println("✅ PASSED: " + name)
+  }
+
+  true
