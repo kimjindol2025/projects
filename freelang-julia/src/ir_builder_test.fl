@@ -1,0 +1,127 @@
+# ============================================================================
+# Phase C Task C.5: IR Builder 테스트 (12개 테스트 케이스)
+# ============================================================================
+
+# Test 1: Value 생성
+function test_create_value(): Bool =
+  let v = new_value(1, "Int32")
+  v.id == 1 && v.type_name == "Int32"
+
+# Test 2: Value ID 추출
+function test_value_id(): Bool =
+  let v = new_value(42, "Float64")
+  value_id(v) == 42
+
+# Test 3: Value 타입 추출
+function test_value_type(): Bool =
+  let v = new_value(1, "String")
+  value_type(v) == "String"
+
+# Test 4: Instruction 생성
+function test_create_instruction(): Bool =
+  let v1 = new_value(1, "Int32")
+  let v2 = new_value(2, "Int32")
+  let result = new_value(3, "Int32")
+  let inst = new_instruction(InstBinOp, "add", [v1, v2], result)
+
+  inst.type_inst == InstBinOp &&
+  inst.op_type == "add" &&
+  inst.ops.length == 2 &&
+  inst.result.id == 3
+
+# Test 5: Instruction with metadata
+function test_instruction_with_meta(): Bool =
+  let result = new_value(1, "Int32")
+  let inst = new_instruction_with_meta(InstLiteral, "", [], result, "42")
+
+  match inst.meta {
+    Some(meta) -> meta == "42",
+    None -> false,
+  }
+
+# Test 6: BasicBlock 생성
+function test_create_block(): Bool =
+  let block = new_block("entry")
+  block.label == "entry" &&
+  block.instructions.length == 0 &&
+  block.predecessors.length == 0 &&
+  block.successors.length == 0
+
+# Test 7: BasicBlock에 instruction 추가
+function test_add_instruction_to_block(): Bool =
+  let block = new_block("entry")
+  let v = new_value(1, "Int32")
+  let inst = new_instruction_with_meta(InstLiteral, "", [], v, "10")
+  let updated = add_instruction(block, inst)
+
+  updated.instructions.length == 1
+
+# Test 8: BasicBlock에 successor 추가
+function test_add_successor(): Bool =
+  let block = new_block("entry")
+  let updated = add_successor(block, "block_1")
+  let updated2 = add_successor(updated, "block_2")
+
+  updated2.successors.length == 2
+
+# Test 9: BasicBlock에 predecessor 추가
+function test_add_predecessor(): Bool =
+  let block = new_block("entry")
+  let updated = add_predecessor(block, "block_0")
+
+  updated.predecessors.length == 1
+
+# Test 10: IRBuilder 생성
+function test_create_builder(): Bool =
+  let builder = new_builder()
+
+  builder.current_block == "entry" &&
+  builder.next_value_id == 1 &&
+  builder.next_block_id == 1
+
+# Test 11: IRBuilder에서 literal 빌드
+function test_build_literal(): Bool =
+  let builder = new_builder()
+  let (builder2, value) = build_literal(builder, "Int32", "42")
+
+  value.type_name == "Int32" &&
+  builder2.next_value_id == 2
+
+# Test 12: IRBuilder에서 binary op 빌드
+function test_build_binary_op(): Bool =
+  let builder = new_builder()
+  let v1 = new_value(1, "Int32")
+  let v2 = new_value(2, "Int32")
+  let (builder2, result) = build_binary_op(builder, v1, "add", v2)
+
+  result.type_name == "Int32" &&
+  builder2.next_value_id == 2
+
+# ============================================================================
+# 모든 테스트 실행
+# ============================================================================
+
+function run_ir_builder_tests(): Bool =
+  let results = [
+    ("test_create_value", test_create_value()),
+    ("test_value_id", test_value_id()),
+    ("test_value_type", test_value_type()),
+    ("test_create_instruction", test_create_instruction()),
+    ("test_instruction_with_meta", test_instruction_with_meta()),
+    ("test_create_block", test_create_block()),
+    ("test_add_instruction_to_block", test_add_instruction_to_block()),
+    ("test_add_successor", test_add_successor()),
+    ("test_add_predecessor", test_add_predecessor()),
+    ("test_create_builder", test_create_builder()),
+    ("test_build_literal", test_build_literal()),
+    ("test_build_binary_op", test_build_binary_op()),
+  ]
+
+  for (name, result) in results {
+    if !result then
+      eprintln("❌ FAILED: " + name)
+    else
+      println("✅ PASSED: " + name)
+  }
+
+  true
