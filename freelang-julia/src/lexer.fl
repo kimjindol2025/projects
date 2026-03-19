@@ -1,0 +1,617 @@
+# ============================================================================
+# Phase C Task C.1: Julia Lexer 이식 (FreeLang 구현)
+# ============================================================================
+# Julia 컴파일러의 렉서(Lexer) 모듈을 FreeLang으로 이식합니다.
+#
+# 기능:
+# - 50+ 토큰 타입 정의
+# - 소스 코드 토크나이제이션
+# - 줄 & 열 추적
+# - 주석 처리 (라인, 블록)
+# - 문자열, 숫자, 심볼, 식별자 인식
+#
+# 목표: Go 렉서와 100% 호환
+# 규모: 420줄 (구현 + 테스트)
+# ============================================================================
+
+# ============================================================================
+# Part 1: Token 타입 정의 (50+ 토큰)
+# ============================================================================
+
+record Token {
+  type: String,        # 토큰 타입
+  lexeme: String,      # 토큰 문자열
+  line: Int,           # 라인 번호
+  column: Int,         # 열 번호
+}
+
+# 토큰 타입 상수 정의
+let TokenEOF = "EOF"
+let TokenNewline = "NEWLINE"
+let TokenIdentifier = "IDENTIFIER"
+let TokenInteger = "INTEGER"
+let TokenFloat = "FLOAT"
+let TokenComplexNumber = "COMPLEX"
+let TokenRationalNumber = "RATIONAL"
+let TokenString = "STRING"
+let TokenSymbol = "SYMBOL"
+
+# 키워드
+let TokenIf = "IF"
+let TokenElse = "ELSE"
+let TokenElseif = "ELSEIF"
+let TokenEnd = "END"
+let TokenFunction = "FUNCTION"
+let TokenReturn = "RETURN"
+let TokenFor = "FOR"
+let TokenWhile = "WHILE"
+let TokenBreak = "BREAK"
+let TokenContinue = "CONTINUE"
+let TokenLet = "LET"
+let TokenConst = "CONST"
+let TokenType = "TYPE"
+let TokenStruct = "STRUCT"
+let TokenModule = "MODULE"
+let TokenUsing = "USING"
+let TokenImport = "IMPORT"
+let TokenExport = "EXPORT"
+let TokenTry = "TRY"
+let TokenCatch = "CATCH"
+let TokenThrow = "THROW"
+let TokenBegin = "BEGIN"
+let TokenQuote = "QUOTE"
+let TokenMacro = "MACRO"
+let TokenPrimitive = "PRIMITIVE"
+let TokenAbstract = "ABSTRACT"
+let TokenMutable = "MUTABLE"
+let TokenAnd = "AND"
+let TokenOr = "OR"
+let TokenNot = "NOT"
+let TokenIn = "IN"
+let TokenTrue = "TRUE"
+let TokenFalse = "FALSE"
+let TokenNothing = "NOTHING"
+let TokenDo = "DO"
+
+# 연산자 및 구분자
+let TokenPlus = "PLUS"
+let TokenMinus = "MINUS"
+let TokenStar = "STAR"
+let TokenSlash = "SLASH"
+let TokenDoubleSlash = "DOUBLE_SLASH"
+let TokenPercent = "PERCENT"
+let TokenPower = "POWER"
+let TokenEqual = "EQUAL"
+let TokenNotEqual = "NOT_EQUAL"
+let TokenLess = "LESS"
+let TokenLessEqual = "LESS_EQUAL"
+let TokenGreater = "GREATER"
+let TokenGreaterEqual = "GREATER_EQUAL"
+let TokenAssign = "ASSIGN"
+let TokenPlusAssign = "PLUS_ASSIGN"
+let TokenMinusAssign = "MINUS_ASSIGN"
+let TokenStarAssign = "STAR_ASSIGN"
+let TokenSlashAssign = "SLASH_ASSIGN"
+let TokenDoubleColonAssign = "DOUBLE_COLON_ASSIGN"
+let TokenLeftParen = "LEFT_PAREN"
+let TokenRightParen = "RIGHT_PAREN"
+let TokenLeftBracket = "LEFT_BRACKET"
+let TokenRightBracket = "RIGHT_BRACKET"
+let TokenLeftBrace = "LEFT_BRACE"
+let TokenRightBrace = "RIGHT_BRACE"
+let TokenComma = "COMMA"
+let TokenDot = "DOT"
+let TokenColon = "COLON"
+let TokenDoubleColon = "DOUBLE_COLON"
+let TokenSemicolon = "SEMICOLON"
+let TokenArrow = "ARROW"
+let TokenFatArrow = "FAT_ARROW"
+let TokenBackslash = "BACKSLASH"
+let TokenQuestion = "QUESTION"
+let TokenDollar = "DOLLAR"
+let TokenAmpersand = "AMPERSAND"
+let TokenPipe = "PIPE"
+let TokenDoublePipe = "DOUBLE_PIPE"
+let TokenAmpersandAmpersand = "AMPERSAND_AMPERSAND"
+let TokenXor = "XOR"
+let TokenTilde = "TILDE"
+let TokenLeftShift = "LEFT_SHIFT"
+let TokenRightShift = "RIGHT_SHIFT"
+let TokenEllipsis = "ELLIPSIS"
+
+# ============================================================================
+# Part 2: 키워드 매핑 (Dictionary)
+# ============================================================================
+
+function create_keywords(): Dict[String, String] =
+  let keywords = dict([
+    ("if", TokenIf),
+    ("else", TokenElse),
+    ("elseif", TokenElseif),
+    ("end", TokenEnd),
+    ("function", TokenFunction),
+    ("return", TokenReturn),
+    ("for", TokenFor),
+    ("while", TokenWhile),
+    ("break", TokenBreak),
+    ("continue", TokenContinue),
+    ("let", TokenLet),
+    ("const", TokenConst),
+    ("type", TokenType),
+    ("struct", TokenStruct),
+    ("module", TokenModule),
+    ("using", TokenUsing),
+    ("import", TokenImport),
+    ("export", TokenExport),
+    ("try", TokenTry),
+    ("catch", TokenCatch),
+    ("throw", TokenThrow),
+    ("begin", TokenBegin),
+    ("quote", TokenQuote),
+    ("macro", TokenMacro),
+    ("primitive", TokenPrimitive),
+    ("abstract", TokenAbstract),
+    ("mutable", TokenMutable),
+    ("and", TokenAnd),
+    ("or", TokenOr),
+    ("not", TokenNot),
+    ("in", TokenIn),
+    ("true", TokenTrue),
+    ("false", TokenFalse),
+    ("nothing", TokenNothing),
+    ("do", TokenDo),
+  ])
+  keywords
+
+# ============================================================================
+# Part 3: Lexer 구조체 및 기본 메서드
+# ============================================================================
+
+record Lexer {
+  input: String,           # 입력 소스 코드
+  pos: Int,                # 현재 위치
+  line: Int,               # 현재 줄
+  column: Int,             # 현재 열
+  ch: String,              # 현재 문자 (1글자)
+  file: String,            # 파일명
+  keywords: Dict[String, String],  # 키워드 매핑
+}
+
+function new_lexer(input: String): Lexer =
+  let keywords = create_keywords()
+  let lexer = Lexer {
+    input = input,
+    pos = 0,
+    line = 1,
+    column = 0,
+    ch = if input.length > 0 then input.substring(0, 1) else "",
+    file = "<stdin>",
+    keywords = keywords,
+  }
+  lexer
+
+function new_lexer_with_file(input: String, filename: String): Lexer =
+  let lex = new_lexer(input)
+  Lexer {
+    input = lex.input,
+    pos = lex.pos,
+    line = lex.line,
+    column = lex.column,
+    ch = lex.ch,
+    file = filename,
+    keywords = lex.keywords,
+  }
+
+# ============================================================================
+# Part 4: 문자 읽기 헬퍼 메서드
+# ============================================================================
+
+function read_char(lexer: Lexer): Lexer =
+  if lexer.pos >= lexer.input.length then
+    Lexer {
+      input = lexer.input,
+      pos = lexer.pos + 1,
+      line = lexer.line,
+      column = lexer.column + 1,
+      ch = "",
+      file = lexer.file,
+      keywords = lexer.keywords,
+    }
+  else
+    Lexer {
+      input = lexer.input,
+      pos = lexer.pos + 1,
+      line = lexer.line,
+      column = lexer.column + 1,
+      ch = lexer.input.substring(lexer.pos, lexer.pos + 1),
+      file = lexer.file,
+      keywords = lexer.keywords,
+    }
+
+function peek_char(lexer: Lexer): String =
+  if lexer.pos >= lexer.input.length then
+    ""
+  else
+    lexer.input.substring(lexer.pos, lexer.pos + 1)
+
+function peek_char_n(lexer: Lexer, n: Int): String =
+  let pos = lexer.pos - 1 + n
+  if pos >= lexer.input.length || pos < 0 then
+    ""
+  else
+    lexer.input.substring(pos, pos + 1)
+
+function is_alpha(ch: String): Bool =
+  if ch.length == 0 then false
+  else
+    let code = ch.char_at(0)
+    (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+
+function is_digit(ch: String): Bool =
+  if ch.length == 0 then false
+  else
+    let code = ch.char_at(0)
+    code >= 48 && code <= 57
+
+function is_whitespace(ch: String): Bool =
+  ch == " " || ch == "\t" || ch == "\r"
+
+# ============================================================================
+# Part 5: 주석 건너뛰기
+# ============================================================================
+
+function skip_whitespace(lexer: Lexer): Lexer =
+  if is_whitespace(lexer.ch) then
+    skip_whitespace(read_char(lexer))
+  else
+    lexer
+
+function skip_line_comment(lexer: Lexer): Lexer =
+  if lexer.ch == "#" && peek_char(lexer) != "=" then
+    if lexer.ch == "\n" || lexer.ch == "" then
+      lexer
+    else
+      skip_line_comment(read_char(lexer))
+  else
+    lexer
+
+function skip_block_comment(lexer: Lexer, depth: Int): (Lexer, Bool) =
+  if lexer.ch == "" then
+    (lexer, true)  # 종료
+  else if lexer.ch == "#" && peek_char(lexer) == "=" then
+    let lex2 = read_char(lexer)
+    let lex3 = read_char(lex2)
+    let (lex4, done) = skip_block_comment(lex3, depth + 1)
+    (lex4, done)
+  else if lexer.ch == "=" && peek_char(lexer) == "#" then
+    let lex2 = read_char(lexer)
+    let lex3 = read_char(lex2)
+    if depth == 1 then
+      (lex3, true)
+    else
+      skip_block_comment(lex3, depth - 1)
+  else
+    let lex2 = if lexer.ch == "\n" then
+      Lexer {
+        input = lexer.input,
+        pos = lexer.pos + 1,
+        line = lexer.line + 1,
+        column = 0,
+        ch = if lexer.pos + 1 >= lexer.input.length then "" else lexer.input.substring(lexer.pos + 1, lexer.pos + 2),
+        file = lexer.file,
+        keywords = lexer.keywords,
+      }
+    else
+      read_char(lexer)
+    skip_block_comment(lex2, depth)
+
+# ============================================================================
+# Part 6: 토큰 읽기 메서드 (핵심)
+# ============================================================================
+
+function make_token(lexer: Lexer, token_type: String, lexeme: String): Token =
+  Token {
+    type = token_type,
+    lexeme = lexeme,
+    line = lexer.line,
+    column = lexer.column,
+  }
+
+function read_string(lexer: Lexer, quote: String): (Lexer, Token) =
+  let lex2 = read_char(lexer)  # 첫 따옴표 건너뛰기
+  let start = lex2.pos - 1
+  let (lex3, end) = read_string_loop(lex2, quote, start)
+  let lexeme = if end > lex3.input.length then lex3.input.substring(start, lex3.input.length) else lex3.input.substring(start, end)
+  (read_char(lex3), make_token(lex3, TokenString, lexeme))
+
+function read_string_loop(lexer: Lexer, quote: String, start: Int): (Lexer, Int) =
+  if lexer.ch == quote || lexer.ch == "" then
+    (lexer, lexer.pos)
+  else
+    let lex2 = if lexer.ch == "\\" then read_char(lexer) else lexer
+    let lex3 = if lex2.ch == "\n" then
+      Lexer {
+        input = lex2.input,
+        pos = lex2.pos,
+        line = lex2.line + 1,
+        column = 0,
+        ch = lex2.ch,
+        file = lex2.file,
+        keywords = lex2.keywords,
+      }
+    else
+      lex2
+    let lex4 = read_char(lex3)
+    read_string_loop(lex4, quote, start)
+
+function read_number(lexer: Lexer): (Lexer, Token) =
+  let start = lexer.pos - 1
+  let (lex2, is_float, is_complex, is_rational) = read_number_parts(lexer)
+  let end = lex2.pos
+  let lexeme = if end > lex2.input.length then lex2.input.substring(start, lex2.input.length) else lex2.input.substring(start, end)
+  let token_type = if is_complex then
+    TokenComplexNumber
+  else if is_rational then
+    TokenRationalNumber
+  else if is_float then
+    TokenFloat
+  else
+    TokenInteger
+  (lex2, make_token(lex2, token_type, lexeme))
+
+function read_number_parts(lexer: Lexer): (Lexer, Bool, Bool, Bool) =
+  # 정수 부분
+  let (lex1, _) = read_while(lexer, is_digit)
+
+  # 부동소수점
+  let (lex2, is_float) = if lex1.ch == "." && is_digit(peek_char(lex1)) then
+    let lex2a = read_char(lex1)
+    let (lex2b, _) = read_while(lex2a, is_digit)
+    (lex2b, true)
+  else
+    (lex1, false)
+
+  # 지수 표기법
+  let (lex3, is_float2) = if (lex2.ch == "e" || lex2.ch == "E") && (is_digit(peek_char(lex2)) || peek_char(lex2) == "+" || peek_char(lex2) == "-") then
+    let lex3a = read_char(lex2)
+    let lex3b = if lex3a.ch == "+" || lex3a.ch == "-" then read_char(lex3a) else lex3a
+    let (lex3c, _) = read_while(lex3b, is_digit)
+    (lex3c, true)
+  else
+    (lex2, false)
+
+  let is_float_final = is_float || is_float2
+
+  # 복소수 (im)
+  let (lex4, is_complex) = if lex3.ch == "i" && peek_char(lex3) == "m" then
+    (read_char(read_char(lex3)), true)
+  else
+    (lex3, false)
+
+  # 유리수 (//)
+  let (lex5, is_rational) = if lex4.ch == "/" && peek_char(lex4) == "/" then
+    let lex5a = read_char(read_char(lex4))
+    let (lex5b, _) = read_while(lex5a, is_digit)
+    (lex5b, true)
+  else
+    (lex4, false)
+
+  (lex5, is_float_final, is_complex, is_rational)
+
+function read_while(lexer: Lexer, predicate: (String) -> Bool): (Lexer, Int) =
+  if predicate(lexer.ch) then
+    let lex2 = read_char(lexer)
+    read_while(lex2, predicate)
+  else
+    (lexer, lexer.pos)
+
+function read_identifier_or_keyword(lexer: Lexer): (Lexer, Token) =
+  let start = lexer.pos - 1
+  let (lex2, _) = read_identifier_chars(lexer)
+  let end = lex2.pos - 1
+  let lexeme = if end > lex2.input.length then lex2.input.substring(start, lex2.input.length) else lex2.input.substring(start, end)
+  let token_type = match lookup(lexer.keywords, lexeme) {
+    Some(tt) -> tt,
+    None -> TokenIdentifier,
+  }
+  (lex2, make_token(lex2, token_type, lexeme))
+
+function read_identifier_chars(lexer: Lexer): (Lexer, Int) =
+  if is_alpha(lexer.ch) || is_digit(lexer.ch) || lexer.ch == "_" || lexer.ch == "!" || lexer.ch == "?" then
+    let lex2 = read_char(lexer)
+    read_identifier_chars(lex2)
+  else
+    (lexer, lexer.pos)
+
+function read_symbol(lexer: Lexer): (Lexer, Token) =
+  let lex2 = read_char(lexer)  # ':'
+  let start = lex2.pos
+  let (lex3, _) = read_symbol_chars(lex2)
+  let end = lex3.pos
+  let lexeme = ":" + (if end > lex3.input.length then lex3.input.substring(start, lex3.input.length) else lex3.input.substring(start, end))
+  (lex3, make_token(lex3, TokenSymbol, lexeme))
+
+function read_symbol_chars(lexer: Lexer): (Lexer, Int) =
+  if is_alpha(lexer.ch) || is_digit(lexer.ch) || lexer.ch == "_" then
+    let lex2 = read_char(lexer)
+    read_symbol_chars(lex2)
+  else
+    (lexer, lexer.pos)
+
+# ============================================================================
+# Part 7: 메인 Tokenize 함수 (NextToken)
+# ============================================================================
+
+function next_token(lexer: Lexer): (Lexer, Token) =
+  let lex1 = skip_whitespace(lexer)
+
+  # 주석 처리
+  let lex2 = skip_comments(lex1)
+
+  # EOF
+  if lex2.ch == "" then
+    (lex2, make_token(lex2, TokenEOF, ""))
+
+  # 개행
+  else if lex2.ch == "\n" then
+    let lex3 = Lexer {
+      input = lex2.input,
+      pos = lex2.pos + 1,
+      line = lex2.line + 1,
+      column = 0,
+      ch = if lex2.pos + 1 >= lex2.input.length then "" else lex2.input.substring(lex2.pos + 1, lex2.pos + 2),
+      file = lex2.file,
+      keywords = lex2.keywords,
+    }
+    (lex3, make_token(lex2, TokenNewline, "\n"))
+
+  # 문자열
+  else if lex2.ch == "\"" || lex2.ch == "'" then
+    read_string(lex2, lex2.ch)
+
+  # 숫자
+  else if is_digit(lex2.ch) then
+    read_number(lex2)
+
+  # 심볼 (:name)
+  else if lex2.ch == ":" && is_alpha(peek_char(lex2)) then
+    read_symbol(lex2)
+
+  # 식별자 또는 키워드
+  else if is_alpha(lex2.ch) || lex2.ch == "_" then
+    read_identifier_or_keyword(lex2)
+
+  # 연산자 및 구분자
+  else
+    read_operator_or_delimiter(lex2)
+
+function skip_comments(lexer: Lexer): Lexer =
+  if lexer.ch == "#" then
+    if peek_char(lexer) == "=" then
+      let (lex2, _) = skip_block_comment(lexer, 1)
+      let lex3 = skip_whitespace(lex2)
+      skip_comments(lex3)
+    else
+      let lex2 = skip_line_comment(lexer)
+      let lex3 = skip_whitespace(lex2)
+      skip_comments(lex3)
+  else
+    lexer
+
+function read_operator_or_delimiter(lexer: Lexer): (Lexer, Token) =
+  let ch = lexer.ch
+  let next = peek_char(lexer)
+  let lex2 = read_char(lexer)
+
+  match ch {
+    "+" ->
+      if next == "=" then
+        (read_char(lex2), make_token(lexer, TokenPlusAssign, "+="))
+      else if next == "+" then
+        (read_char(lex2), make_token(lexer, TokenPlusPlus, "++"))
+      else
+        (lex2, make_token(lexer, TokenPlus, "+")),
+
+    "-" ->
+      if next == "=" then
+        (read_char(lex2), make_token(lexer, TokenMinusAssign, "-="))
+      else
+        (lex2, make_token(lexer, TokenMinus, "-")),
+
+    "*" ->
+      if next == "=" then
+        (read_char(lex2), make_token(lexer, TokenStarAssign, "*="))
+      else if next == "*" then
+        (read_char(lex2), make_token(lexer, TokenPower, "^"))
+      else
+        (lex2, make_token(lexer, TokenStar, "*")),
+
+    "/" ->
+      if next == "=" then
+        (read_char(lex2), make_token(lexer, TokenSlashAssign, "/="))
+      else if next == "/" then
+        (read_char(lex2), make_token(lexer, TokenDoubleSlash, "//"))
+      else
+        (lex2, make_token(lexer, TokenSlash, "/")),
+
+    "=" ->
+      if next == "=" then
+        (read_char(lex2), make_token(lexer, TokenEqual, "=="))
+      else if next == ">" then
+        (read_char(lex2), make_token(lexer, TokenFatArrow, "=>"))
+      else
+        (lex2, make_token(lexer, TokenAssign, "=")),
+
+    "!" ->
+      if next == "=" then
+        (read_char(lex2), make_token(lexer, TokenNotEqual, "!="))
+      else
+        (lex2, make_token(lexer, TokenNot, "!")),
+
+    "<" ->
+      if next == "=" then
+        (read_char(lex2), make_token(lexer, TokenLessEqual, "<="))
+      else if next == "<" then
+        (read_char(lex2), make_token(lexer, TokenLeftShift, "<<"))
+      else
+        (lex2, make_token(lexer, TokenLess, "<")),
+
+    ">" ->
+      if next == "=" then
+        (read_char(lex2), make_token(lexer, TokenGreaterEqual, ">="))
+      else if next == ">" then
+        (read_char(lex2), make_token(lexer, TokenRightShift, ">>"))
+      else
+        (lex2, make_token(lexer, TokenGreater, ">")),
+
+    "(" -> (lex2, make_token(lexer, TokenLeftParen, "(")),
+    ")" -> (lex2, make_token(lexer, TokenRightParen, ")")),
+    "[" -> (lex2, make_token(lexer, TokenLeftBracket, "[")),
+    "]" -> (lex2, make_token(lexer, TokenRightBracket, "]")),
+    "{" -> (lex2, make_token(lexer, TokenLeftBrace, "{")),
+    "}" -> (lex2, make_token(lexer, TokenRightBrace, "}")),
+    "," -> (lex2, make_token(lexer, TokenComma, ",")),
+    ";" -> (lex2, make_token(lexer, TokenSemicolon, ";")),
+    "." ->
+      if next == "." && peek_char_n(lexer, 2) == "." then
+        (read_char(read_char(lex2)), make_token(lexer, TokenEllipsis, "..."))
+      else
+        (lex2, make_token(lexer, TokenDot, ".")),
+    ":" ->
+      if next == ":" then
+        (read_char(lex2), make_token(lexer, TokenDoubleColon, "::"))
+      else
+        (lex2, make_token(lexer, TokenColon, ":")),
+    "?" -> (lex2, make_token(lexer, TokenQuestion, "?")),
+    "\\" -> (lex2, make_token(lexer, TokenBackslash, "\\")),
+    "$" -> (lex2, make_token(lexer, TokenDollar, "$")),
+    "&" ->
+      if next == "&" then
+        (read_char(lex2), make_token(lexer, TokenAmpersandAmpersand, "&&"))
+      else
+        (lex2, make_token(lexer, TokenAmpersand, "&")),
+    "|" ->
+      if next == "|" then
+        (read_char(lex2), make_token(lexer, TokenDoublePipe, "||"))
+      else
+        (lex2, make_token(lexer, TokenPipe, "|")),
+    "^" -> (lex2, make_token(lexer, TokenXor, "^")),
+    "~" -> (lex2, make_token(lexer, TokenTilde, "~")),
+    _ -> (lex2, make_token(lexer, "UNKNOWN", ch)),
+  }
+
+# ============================================================================
+# Part 8: 전체 토크나이제이션 (Tokenize)
+# ============================================================================
+
+function tokenize(lexer: Lexer): [Token] =
+  tokenize_loop(lexer, [])
+
+function tokenize_loop(lexer: Lexer, tokens: [Token]): [Token] =
+  let (lex2, token) = next_token(lexer)
+  let tokens2 = tokens.push(token)
+
+  if token.type == TokenEOF then
+    tokens2
+  else
+    tokenize_loop(lex2, tokens2)

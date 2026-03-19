@@ -1,0 +1,173 @@
+# ============================================================================
+# Phase C Task C.1: Lexer 테스트 (18개 테스트 케이스)
+# ============================================================================
+
+# Test 1: 기본 토큰 인식
+function test_basic_tokens(): Bool =
+  let lex = new_lexer("+ - * /")
+  let (lex1, tok1) = next_token(lex)
+  let (lex2, tok2) = next_token(lex1)
+  let (lex3, tok3) = next_token(lex2)
+  let (lex4, tok4) = next_token(lex3)
+
+  tok1.type == TokenPlus &&
+  tok2.type == TokenMinus &&
+  tok3.type == TokenStar &&
+  tok4.type == TokenSlash
+
+# Test 2: 정수 인식
+function test_integer_token(): Bool =
+  let lex = new_lexer("42")
+  let (_, tok) = next_token(lex)
+  tok.type == TokenInteger && tok.lexeme == "42"
+
+# Test 3: 부동소수점 인식
+function test_float_token(): Bool =
+  let lex = new_lexer("3.14")
+  let (_, tok) = next_token(lex)
+  tok.type == TokenFloat && tok.lexeme == "3.14"
+
+# Test 4: 문자열 인식
+function test_string_token(): Bool =
+  let lex = new_lexer("\"hello world\"")
+  let (_, tok) = next_token(lex)
+  tok.type == TokenString && tok.lexeme == "\"hello world\""
+
+# Test 5: 식별자 인식
+function test_identifier_token(): Bool =
+  let lex = new_lexer("myVariable")
+  let (_, tok) = next_token(lex)
+  tok.type == TokenIdentifier && tok.lexeme == "myVariable"
+
+# Test 6: 키워드 인식 (if)
+function test_keyword_if(): Bool =
+  let lex = new_lexer("if")
+  let (_, tok) = next_token(lex)
+  tok.type == TokenIf && tok.lexeme == "if"
+
+# Test 7: 키워드 인식 (function)
+function test_keyword_function(): Bool =
+  let lex = new_lexer("function")
+  let (_, tok) = next_token(lex)
+  tok.type == TokenFunction && tok.lexeme == "function"
+
+# Test 8: 키워드 인식 (return)
+function test_keyword_return(): Bool =
+  let lex = new_lexer("return")
+  let (_, tok) = next_token(lex)
+  tok.type == TokenReturn && tok.lexeme == "return"
+
+# Test 9: 심볼 인식
+function test_symbol_token(): Bool =
+  let lex = new_lexer(":mySymbol")
+  let (_, tok) = next_token(lex)
+  tok.type == TokenSymbol && tok.lexeme == ":mySymbol"
+
+# Test 10: 복합 연산자
+function test_compound_operator(): Bool =
+  let lex = new_lexer("+=")
+  let (_, tok) = next_token(lex)
+  tok.type == TokenPlusAssign && tok.lexeme == "+="
+
+# Test 11: 괄호 인식
+function test_parentheses(): Bool =
+  let lex = new_lexer("()")
+  let (lex1, tok1) = next_token(lex)
+  let (_, tok2) = next_token(lex1)
+  tok1.type == TokenLeftParen && tok2.type == TokenRightParen
+
+# Test 12: 대괄호 인식
+function test_brackets(): Bool =
+  let lex = new_lexer("[]")
+  let (lex1, tok1) = next_token(lex)
+  let (_, tok2) = next_token(lex1)
+  tok1.type == TokenLeftBracket && tok2.type == TokenRightBracket
+
+# Test 13: 중괄호 인식
+function test_braces(): Bool =
+  let lex = new_lexer("{}")
+  let (lex1, tok1) = next_token(lex)
+  let (_, tok2) = next_token(lex1)
+  tok1.type == TokenLeftBrace && tok2.type == TokenRightBrace
+
+# Test 14: 쉼표 및 점 인식
+function test_comma_and_dot(): Bool =
+  let lex = new_lexer(",.")
+  let (lex1, tok1) = next_token(lex)
+  let (_, tok2) = next_token(lex1)
+  tok1.type == TokenComma && tok2.type == TokenDot
+
+# Test 15: 개행 토큰
+function test_newline_token(): Bool =
+  let lex = new_lexer("x\ny")
+  let (lex1, tok1) = next_token(lex)
+  let (lex2, tok2) = next_token(lex1)
+  let (_, tok3) = next_token(lex2)
+  tok1.type == TokenIdentifier &&
+  tok2.type == TokenNewline &&
+  tok3.type == TokenIdentifier
+
+# Test 16: 주석 건너뛰기
+function test_skip_line_comment(): Bool =
+  let lex = new_lexer("x # comment\ny")
+  let (lex1, tok1) = next_token(lex)
+  let (lex2, tok2) = next_token(lex1)
+  let (_, tok3) = next_token(lex2)
+  tok1.type == TokenIdentifier &&
+  tok2.type == TokenNewline &&
+  tok3.type == TokenIdentifier
+
+# Test 17: 복소수 인식
+function test_complex_number(): Bool =
+  let lex = new_lexer("2im")
+  let (_, tok) = next_token(lex)
+  tok.type == TokenComplexNumber && tok.lexeme == "2im"
+
+# Test 18: 토크나이제이션 (전체 파이프라인)
+function test_full_tokenize(): Bool =
+  let lex = new_lexer("x = 42")
+  let tokens = tokenize(lex)
+  tokens.length > 0 &&
+  tokens.first().type == TokenIdentifier &&
+  tokens.at(1).type == TokenAssign &&
+  tokens.at(2).type == TokenInteger &&
+  tokens.at(3).type == TokenEOF
+
+# ============================================================================
+# 모든 테스트 실행
+# ============================================================================
+
+function run_all_tests(): Bool =
+  let results = [
+    ("test_basic_tokens", test_basic_tokens()),
+    ("test_integer_token", test_integer_token()),
+    ("test_float_token", test_float_token()),
+    ("test_string_token", test_string_token()),
+    ("test_identifier_token", test_identifier_token()),
+    ("test_keyword_if", test_keyword_if()),
+    ("test_keyword_function", test_keyword_function()),
+    ("test_keyword_return", test_keyword_return()),
+    ("test_symbol_token", test_symbol_token()),
+    ("test_compound_operator", test_compound_operator()),
+    ("test_parentheses", test_parentheses()),
+    ("test_brackets", test_brackets()),
+    ("test_braces", test_braces()),
+    ("test_comma_and_dot", test_comma_and_dot()),
+    ("test_newline_token", test_newline_token()),
+    ("test_skip_line_comment", test_skip_line_comment()),
+    ("test_complex_number", test_complex_number()),
+    ("test_full_tokenize", test_full_tokenize()),
+  ]
+
+  # 모든 테스트가 true인지 확인
+  all_pass = true
+  for (name, result) in results {
+    if !result then {
+      eprintln("❌ FAILED: " + name)
+      all_pass = false
+    } else {
+      println("✅ PASSED: " + name)
+    }
+  }
+
+  all_pass
