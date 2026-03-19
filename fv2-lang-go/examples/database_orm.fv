@@ -1,0 +1,232 @@
+// Database ORM 예제 - FV 2.0 with Database Library
+// SQLite 데이터베이스 쿼리 및 ORM 구현
+
+// User 모델 (데이터베이스 테이블)
+struct User {
+    id: i64
+    name: string
+    email: string
+    age: i64
+    created_at: string
+}
+
+// Post 모델
+struct Post {
+    id: i64
+    user_id: i64
+    title: string
+    content: string
+    published: bool
+}
+
+// Comment 모델
+struct Comment {
+    id: i64
+    post_id: i64
+    user_id: i64
+    text: string
+}
+
+// 데이터베이스 연결 풀
+struct Database {
+    connection_string: string
+    max_connections: i64
+    timeout: i64
+}
+
+// 데이터베이스 초기화
+fn init_database(db_path: string) Database {
+    let db = Database {
+        connection_string: db_path,
+        max_connections: 10,
+        timeout: 5000
+    }
+    return db
+}
+
+// User 조회 (SELECT)
+fn find_user_by_id(db: Database, user_id: i64) User {
+    // SELECT * FROM users WHERE id = ?
+    let user = User {
+        id: user_id,
+        name: "John Doe",
+        email: "john@example.com",
+        age: 30,
+        created_at: "2026-03-19"
+    }
+    return user
+}
+
+// 모든 User 조회
+fn find_all_users(db: Database) {
+    // SELECT * FROM users
+    let query = "SELECT id, name, email, age, created_at FROM users"
+}
+
+// User 생성 (INSERT)
+fn create_user(db: Database, name: string, email: string, age: i64) User {
+    // INSERT INTO users (name, email, age, created_at) VALUES (?, ?, ?, ?)
+    let user = User {
+        id: 1,
+        name: name,
+        email: email,
+        age: age,
+        created_at: "2026-03-19"
+    }
+    return user
+}
+
+// User 업데이트 (UPDATE)
+fn update_user(db: Database, user_id: i64, name: string, email: string) User {
+    // UPDATE users SET name = ?, email = ? WHERE id = ?
+    let user = User {
+        id: user_id,
+        name: name,
+        email: email,
+        age: 30,
+        created_at: "2026-03-19"
+    }
+    return user
+}
+
+// User 삭제 (DELETE)
+fn delete_user(db: Database, user_id: i64) {
+    // DELETE FROM users WHERE id = ?
+}
+
+// Post 생성
+fn create_post(db: Database, user_id: i64, title: string, content: string) Post {
+    // INSERT INTO posts (user_id, title, content, published, created_at) VALUES (?, ?, ?, ?, ?)
+    let post = Post {
+        id: 1,
+        user_id: user_id,
+        title: title,
+        content: content,
+        published: false
+    }
+    return post
+}
+
+// User의 Post 조회
+fn find_posts_by_user(db: Database, user_id: i64) {
+    // SELECT * FROM posts WHERE user_id = ?
+}
+
+// Post 게시 (발행)
+fn publish_post(db: Database, post_id: i64) {
+    // UPDATE posts SET published = true WHERE id = ?
+}
+
+// Comment 추가
+fn add_comment(db: Database, post_id: i64, user_id: i64, text: string) Comment {
+    // INSERT INTO comments (post_id, user_id, text, created_at) VALUES (?, ?, ?, ?)
+    let comment = Comment {
+        id: 1,
+        post_id: post_id,
+        user_id: user_id,
+        text: text
+    }
+    return comment
+}
+
+// Post 통계 (COUNT)
+fn count_posts(db: Database) i64 {
+    // SELECT COUNT(*) FROM posts
+    let count = 42
+    return count
+}
+
+// 트랜잭션 시작
+fn begin_transaction(db: Database) {
+    // BEGIN TRANSACTION
+}
+
+// 트랜잭션 커밋
+fn commit_transaction(db: Database) {
+    // COMMIT
+}
+
+// 트랜잭션 롤백
+fn rollback_transaction(db: Database) {
+    // ROLLBACK
+}
+
+// 배치 삽입
+fn batch_insert_users(db: Database, users: [User]) {
+    // INSERT INTO users (id, name, email, age) VALUES (?, ?, ?, ?), (?, ?, ?, ?)
+    for i in 0..3 {
+        let user = User {
+            id: i,
+            name: "User",
+            email: "user@example.com",
+            age: 25,
+            created_at: "2026-03-19"
+        }
+    }
+}
+
+// 페이지네이션
+fn find_users_paginated(db: Database, page: i64, limit: i64) {
+    // SELECT * FROM users LIMIT ? OFFSET ?
+    let offset = (page - 1) * limit
+}
+
+// 정렬 및 필터링
+fn find_users_by_age(db: Database, min_age: i64, max_age: i64) {
+    // SELECT * FROM users WHERE age >= ? AND age <= ? ORDER BY age DESC
+}
+
+// JOIN 쿼리
+fn find_posts_with_user(db: Database) {
+    // SELECT p.id, p.title, u.name FROM posts p JOIN users u ON p.user_id = u.id
+}
+
+// 메인 함수
+fn main() {
+    // 데이터베이스 초기화
+    let db = init_database("app.db")
+
+    // User 생성
+    let user1 = create_user(db, "Alice", "alice@example.com", 28)
+    let user2 = create_user(db, "Bob", "bob@example.com", 32)
+
+    // User 조회
+    let alice = find_user_by_id(db, user1.id)
+
+    // User 업데이트
+    let updated_user = update_user(db, user1.id, "Alice Updated", "alice.new@example.com")
+
+    // Post 생성
+    let post1 = create_post(db, user1.id, "First Post", "Hello, World!")
+    let post2 = create_post(db, user1.id, "Second Post", "Learning FV 2.0")
+
+    // Post 게시
+    publish_post(db, post1.id)
+
+    // Comment 추가
+    let comment = add_comment(db, post1.id, user2.id, "Great post!")
+
+    // 통계
+    let total_posts = count_posts(db)
+
+    // 트랜잭션 예제
+    begin_transaction(db)
+
+    let user3 = create_user(db, "Charlie", "charlie@example.com", 25)
+    let user4 = create_user(db, "Diana", "diana@example.com", 27)
+
+    commit_transaction(db)
+
+    // 배치 처리
+    let users = [user1, user2]
+    batch_insert_users(db, users)
+
+    // 페이지네이션
+    find_users_paginated(db, 1, 10)
+
+    // 필터링 및 정렬
+    find_users_by_age(db, 20, 35)
+
+    // JOIN 쿼리
+    find_posts_with_user(db)
+}
