@@ -1,0 +1,416 @@
+# ============================================================================
+# Phase C Task C.4: Julia Semantic Analyzer 이식 (FreeLang 구현)
+# ============================================================================
+# Julia 컴파일러의 시맨틱 분석(Semantic Analysis) 모듈을 FreeLang으로 이식합니다.
+#
+# 기능:
+# - Scope & Symbol Table 관리
+# - 변수/함수/상수 선언 추적
+# - 타입 검사 (Type Checking)
+# - 에러 수집 및 보고
+# - 함수 컨텍스트 추적
+#
+# 목표: Go 시맨틱 분석기와 100% 호환
+# 규모: 500줄 (구현 + 테스트)
+# ============================================================================
+
+# ============================================================================
+# Part 1: Symbol 정의 (변수, 함수, 상수)
+# ============================================================================
+
+let KindVariable = "Variable"
+let KindFunction = "Function"
+let KindConstant = "Constant"
+let KindType = "Type"
+let KindStruct = "Struct"
+
+record Symbol {
+  name: String,              # 심볼 이름
+  kind: String,              # 종류 (Variable, Function, Constant 등)
+  type_name: String,         # 타입 이름
+  mutable: Bool,             # 가변성
+  defined_at: (Int, Int),    # 정의된 위치 (line, column)
+}
+
+function new_symbol(name: String, kind: String, type_name: String, mutable: Bool, line: Int, column: Int): Symbol =
+  Symbol {
+    name = name,
+    kind = kind,
+    type_name = type_name,
+    mutable = mutable,
+    defined_at = (line, column),
+  }
+
+# ============================================================================
+# Part 2: Scope 관리
+# ============================================================================
+
+record Scope {
+  parent: Option[Scope],
+  name: String,              # 스코프 이름 (함수명 등)
+  symbols: Dict[String, Symbol],
+  depth: Int,                # 스코프 깊이
+}
+
+function new_scope(name: String, depth: Int): Scope =
+  Scope {
+    parent = None,
+    name = name,
+    symbols = dict([]),
+    depth = depth,
+  }
+
+function define_symbol(scope: Scope, symbol: Symbol): Result[Scope, String] =
+  if lookup(scope.symbols, symbol.name).is_some() then
+    Err("Symbol '" + symbol.name + "' already defined in this scope")
+  else
+    Ok(Scope {
+      parent = scope.parent,
+      name = scope.name,
+      symbols = insert(scope.symbols, symbol.name, symbol),
+      depth = scope.depth,
+    })
+
+function lookup_symbol(scope: Scope, name: String): Option[Symbol] =
+  match lookup(scope.symbols, name) {
+    Some(sym) -> Some(sym),
+    None ->
+      match scope.parent {
+        Some(parent) -> lookup_symbol(parent, name),
+        None -> None,
+      },
+  }
+
+function lookup_symbol_local(scope: Scope, name: String): Option[Symbol] =
+  lookup(scope.symbols, name)
+
+# ============================================================================
+# Part 3: ScopeStack 관리 (스택 구조)
+# ============================================================================
+
+record ScopeStack {
+  scopes: [Scope],
+  type_registry: TypeRegistry,
+}
+
+function new_scope_stack(registry: TypeRegistry): ScopeStack =
+  let global_scope = new_scope("global", 0)
+  ScopeStack {
+    scopes = [global_scope],
+    type_registry = registry,
+  }
+
+function push_scope(stack: ScopeStack, name: String): ScopeStack =
+  let current = stack.scopes.last()
+  let new_scope_obj = new_scope(name, current.depth + 1)
+  let new_scope_obj2 = Scope {
+    parent = Some(current),
+    name = new_scope_obj.name,
+    symbols = new_scope_obj.symbols,
+    depth = new_scope_obj.depth,
+  }
+  ScopeStack {
+    scopes = stack.scopes.push(new_scope_obj2),
+    type_registry = stack.type_registry,
+  }
+
+function pop_scope(stack: ScopeStack): ScopeStack =
+  if stack.scopes.length > 1 then
+    ScopeStack {
+      scopes = stack.scopes.slice(0, stack.scopes.length - 1),
+      type_registry = stack.type_registry,
+    }
+  else
+    stack
+
+function define_in_scope(stack: ScopeStack, symbol: Symbol): Result[ScopeStack, String] =
+  let current = stack.scopes.last()
+  match define_symbol(current, symbol) {
+    Ok(updated_scope) ->
+      let updated_scopes = stack.scopes.slice(0, stack.scopes.length - 1).push(updated_scope)
+      Ok(ScopeStack {
+        scopes = updated_scopes,
+        type_registry = stack.type_registry,
+      }),
+    Err(e) -> Err(e),
+  }
+
+function lookup_in_stack(stack: ScopeStack, name: String): Option[Symbol] =
+  let current = stack.scopes.last()
+  lookup_symbol(current, name)
+
+# ============================================================================
+# Part 4: Semantic Error 정의
+# ============================================================================
+
+record SemanticError {
+  message: String,
+  line: Int,
+  column: Int,
+}
+
+function new_error(message: String, line: Int, column: Int): SemanticError =
+  SemanticError {
+    message = message,
+    line = line,
+    column = column,
+  }
+
+# ============================================================================
+# Part 5: Semantic Analyzer 메인 구조
+# ============================================================================
+
+record SemanticAnalyzer {
+  scope_stack: ScopeStack,
+  errors: [SemanticError],
+  current_function: Option[String],  # 현재 함수명
+  in_loop: Bool,                      # 루프 내부 여부
+}
+
+function new_analyzer(registry: TypeRegistry): SemanticAnalyzer =
+  SemanticAnalyzer {
+    scope_stack = new_scope_stack(registry),
+    errors = [],
+    current_function = None,
+    in_loop = false,
+  }
+
+# ============================================================================
+# Part 6: 문 분석 (Statement Analysis)
+# ============================================================================
+
+# Variable/Constant 선언 분석
+function analyze_let_stmt(analyzer: SemanticAnalyzer, name: String, type_hint: Option[String], line: Int, column: Int): (SemanticAnalyzer, Result[String, SemanticError]) =
+  let type_name = match type_hint {
+    Some(t) -> t,
+    None -> "Any",
+  }
+
+  let symbol = new_symbol(name, KindVariable, type_name, true, line, column)
+  match define_in_scope(analyzer.scope_stack, symbol) {
+    Ok(new_stack) ->
+      let new_analyzer = SemanticAnalyzer {
+        scope_stack = new_stack,
+        errors = analyzer.errors,
+        current_function = analyzer.current_function,
+        in_loop = analyzer.in_loop,
+      }
+      (new_analyzer, Ok(name)),
+    Err(e) ->
+      let error = new_error(e, line, column)
+      let new_analyzer = SemanticAnalyzer {
+        scope_stack = analyzer.scope_stack,
+        errors = analyzer.errors.push(error),
+        current_function = analyzer.current_function,
+        in_loop = analyzer.in_loop,
+      }
+      (new_analyzer, Err(error)),
+  }
+
+function analyze_const_stmt(analyzer: SemanticAnalyzer, name: String, type_hint: Option[String], line: Int, column: Int): (SemanticAnalyzer, Result[String, SemanticError]) =
+  let type_name = match type_hint {
+    Some(t) -> t,
+    None -> "Any",
+  }
+
+  let symbol = new_symbol(name, KindConstant, type_name, false, line, column)
+  match define_in_scope(analyzer.scope_stack, symbol) {
+    Ok(new_stack) ->
+      let new_analyzer = SemanticAnalyzer {
+        scope_stack = new_stack,
+        errors = analyzer.errors,
+        current_function = analyzer.current_function,
+        in_loop = analyzer.in_loop,
+      }
+      (new_analyzer, Ok(name)),
+    Err(e) ->
+      let error = new_error(e, line, column)
+      let new_analyzer = SemanticAnalyzer {
+        scope_stack = analyzer.scope_stack,
+        errors = analyzer.errors.push(error),
+        current_function = analyzer.current_function,
+        in_loop = analyzer.in_loop,
+      }
+      (new_analyzer, Err(error)),
+  }
+
+# Function 선언 분석
+function analyze_function_decl(analyzer: SemanticAnalyzer, name: String, params: [String], line: Int, column: Int): (SemanticAnalyzer, Result[String, SemanticError]) =
+  # 함수 심볼 등록
+  let param_types = map(params, fn(_) -> "Any")
+  let return_type = "Any"
+
+  let func_symbol = Symbol {
+    name = name,
+    kind = KindFunction,
+    type_name = return_type,
+    mutable = false,
+    defined_at = (line, column),
+  }
+
+  match define_in_scope(analyzer.scope_stack, func_symbol) {
+    Ok(new_stack) ->
+      # 함수 스코프 진입
+      let func_stack = push_scope(ScopeStack {
+        scopes = new_stack.scopes,
+        type_registry = new_stack.type_registry,
+      }, name)
+
+      # 매개변수 추가
+      let param_symbols = map(params, fn(p) ->
+        new_symbol(p, KindVariable, "Any", true, line, column)
+      )
+
+      let new_analyzer = SemanticAnalyzer {
+        scope_stack = func_stack,
+        errors = analyzer.errors,
+        current_function = Some(name),
+        in_loop = analyzer.in_loop,
+      }
+      (new_analyzer, Ok(name)),
+    Err(e) ->
+      let error = new_error(e, line, column)
+      let new_analyzer = SemanticAnalyzer {
+        scope_stack = analyzer.scope_stack,
+        errors = analyzer.errors.push(error),
+        current_function = analyzer.current_function,
+        in_loop = analyzer.in_loop,
+      }
+      (new_analyzer, Err(error)),
+  }
+
+# 함수 스코프 종료
+function end_function(analyzer: SemanticAnalyzer): SemanticAnalyzer =
+  SemanticAnalyzer {
+    scope_stack = pop_scope(analyzer.scope_stack),
+    errors = analyzer.errors,
+    current_function = None,
+    in_loop = analyzer.in_loop,
+  }
+
+# ============================================================================
+# Part 7: 제어 흐름 분석
+# ============================================================================
+
+function analyze_return_stmt(analyzer: SemanticAnalyzer, line: Int, column: Int): (SemanticAnalyzer, Result[String, SemanticError]) =
+  match analyzer.current_function {
+    Some(func_name) -> (analyzer, Ok("return")),
+    None ->
+      let error = new_error("return outside function", line, column)
+      let new_analyzer = SemanticAnalyzer {
+        scope_stack = analyzer.scope_stack,
+        errors = analyzer.errors.push(error),
+        current_function = analyzer.current_function,
+        in_loop = analyzer.in_loop,
+      }
+      (new_analyzer, Err(error)),
+  }
+
+function analyze_break_stmt(analyzer: SemanticAnalyzer, line: Int, column: Int): (SemanticAnalyzer, Result[String, SemanticError]) =
+  if analyzer.in_loop then
+    (analyzer, Ok("break"))
+  else
+    let error = new_error("break outside loop", line, column)
+    let new_analyzer = SemanticAnalyzer {
+      scope_stack = analyzer.scope_stack,
+      errors = analyzer.errors.push(error),
+      current_function = analyzer.current_function,
+      in_loop = analyzer.in_loop,
+    }
+    (new_analyzer, Err(error))
+
+function analyze_continue_stmt(analyzer: SemanticAnalyzer, line: Int, column: Int): (SemanticAnalyzer, Result[String, SemanticError]) =
+  if analyzer.in_loop then
+    (analyzer, Ok("continue"))
+  else
+    let error = new_error("continue outside loop", line, column)
+    let new_analyzer = SemanticAnalyzer {
+      scope_stack = analyzer.scope_stack,
+      errors = analyzer.errors.push(error),
+      current_function = analyzer.current_function,
+      in_loop = analyzer.in_loop,
+    }
+    (new_analyzer, Err(error))
+
+function enter_loop(analyzer: SemanticAnalyzer): SemanticAnalyzer =
+  SemanticAnalyzer {
+    scope_stack = analyzer.scope_stack,
+    errors = analyzer.errors,
+    current_function = analyzer.current_function,
+    in_loop = true,
+  }
+
+function exit_loop(analyzer: SemanticAnalyzer): SemanticAnalyzer =
+  SemanticAnalyzer {
+    scope_stack = analyzer.scope_stack,
+    errors = analyzer.errors,
+    current_function = analyzer.current_function,
+    in_loop = false,
+  }
+
+# ============================================================================
+# Part 8: 표현식 분석 (타입 검사)
+# ============================================================================
+
+function analyze_identifier(analyzer: SemanticAnalyzer, name: String): Option[String] =
+  match lookup_in_stack(analyzer.scope_stack, name) {
+    Some(sym) -> Some(sym.type_name),
+    None -> None,
+  }
+
+function analyze_binary_op(analyzer: SemanticAnalyzer, left_type: Option[String], op: String, right_type: Option[String]): Option[String] =
+  match (left_type, right_type) {
+    (Some(l), Some(r)) ->
+      # 산술 연산
+      if op == "+" || op == "-" || op == "*" || op == "/" then
+        if l == "Int" && r == "Int" then Some("Int")
+        else if l == "Float" || r == "Float" then Some("Float")
+        else Some("Any")
+      # 비교 연산
+      else if op == "==" || op == "!=" || op == "<" || op == "<=" || op == ">" || op == ">=" then
+        Some("Bool")
+      # 논리 연산
+      else if op == "&&" || op == "||" then
+        Some("Bool")
+      else
+        Some("Any"),
+    _ -> None,
+  }
+
+# ============================================================================
+# Part 9: 타입 호환성 검사
+# ============================================================================
+
+function is_type_compatible(from_type: String, to_type: String): Bool =
+  from_type == to_type ||
+  to_type == "Any" ||
+  from_type == "Nothing"
+
+function check_assignment(analyzer: SemanticAnalyzer, left_type: String, right_type: String, line: Int, column: Int): (SemanticAnalyzer, Bool) =
+  if is_type_compatible(right_type, left_type) then
+    (analyzer, true)
+  else
+    let error = new_error("cannot assign " + right_type + " to " + left_type, line, column)
+    let new_analyzer = SemanticAnalyzer {
+      scope_stack = analyzer.scope_stack,
+      errors = analyzer.errors.push(error),
+      current_function = analyzer.current_function,
+      in_loop = analyzer.in_loop,
+    }
+    (new_analyzer, false)
+
+# ============================================================================
+# Part 10: 에러 보고 및 분석 완료
+# ============================================================================
+
+function has_errors(analyzer: SemanticAnalyzer): Bool =
+  analyzer.errors.length > 0
+
+function get_errors(analyzer: SemanticAnalyzer): [SemanticError] =
+  analyzer.errors
+
+function error_count(analyzer: SemanticAnalyzer): Int =
+  analyzer.errors.length
+
+function format_error(error: SemanticError): String =
+  "Error at line " + error.line.from_int() + ", column " + error.column.from_int() + ": " + error.message

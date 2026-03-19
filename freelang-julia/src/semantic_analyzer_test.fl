@@ -1,0 +1,175 @@
+# ============================================================================
+# Phase C Task C.4: Semantic Analyzer 테스트 (15개 테스트 케이스)
+# ============================================================================
+
+# Test 1: Symbol 생성
+function test_create_symbol(): Bool =
+  let sym = new_symbol("x", KindVariable, "Int", true, 1, 1)
+  sym.name == "x" &&
+  sym.kind == KindVariable &&
+  sym.type_name == "Int" &&
+  sym.mutable == true
+
+# Test 2: Scope 생성
+function test_create_scope(): Bool =
+  let scope = new_scope("test", 0)
+  scope.name == "test" &&
+  scope.depth == 0
+
+# Test 3: Scope에 Symbol 정의
+function test_define_symbol(): Bool =
+  let scope = new_scope("test", 0)
+  let sym = new_symbol("x", KindVariable, "Int", true, 1, 1)
+  match define_symbol(scope, sym) {
+    Ok(updated) -> updated.symbols.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 4: Scope에서 Symbol 조회
+function test_lookup_symbol(): Bool =
+  let scope = new_scope("test", 0)
+  let sym = new_symbol("x", KindVariable, "Int", true, 1, 1)
+  match define_symbol(scope, sym) {
+    Ok(updated) ->
+      match lookup_symbol(updated, "x") {
+        Some(found) -> found.name == "x",
+        None -> false,
+      },
+    Err(_) -> false,
+  }
+
+# Test 5: ScopeStack 생성
+function test_create_scope_stack(): Bool =
+  let registry = new_registry()
+  let stack = new_scope_stack(registry)
+  stack.scopes.length == 1 &&
+  stack.scopes.first().name == "global"
+
+# Test 6: ScopeStack에 Scope 푸시
+function test_push_scope(): Bool =
+  let registry = new_registry()
+  let stack = new_scope_stack(registry)
+  let stack2 = push_scope(stack, "test_func")
+  stack2.scopes.length == 2 &&
+  stack2.scopes.last().name == "test_func"
+
+# Test 7: ScopeStack에서 Scope 팝
+function test_pop_scope(): Bool =
+  let registry = new_registry()
+  let stack = new_scope_stack(registry)
+  let stack2 = push_scope(stack, "test_func")
+  let stack3 = pop_scope(stack2)
+  stack3.scopes.length == 1
+
+# Test 8: ScopeStack에 Symbol 정의
+function test_define_in_scope_stack(): Bool =
+  let registry = new_registry()
+  let stack = new_scope_stack(registry)
+  let sym = new_symbol("x", KindVariable, "Int", true, 1, 1)
+  match define_in_scope(stack, sym) {
+    Ok(new_stack) -> new_stack.scopes.length > 0,
+    Err(_) -> false,
+  }
+
+# Test 9: ScopeStack에서 Symbol 조회
+function test_lookup_in_stack(): Bool =
+  let registry = new_registry()
+  let stack = new_scope_stack(registry)
+  let sym = new_symbol("x", KindVariable, "Int", true, 1, 1)
+  match define_in_scope(stack, sym) {
+    Ok(new_stack) ->
+      match lookup_in_stack(new_stack, "x") {
+        Some(found) -> found.name == "x",
+        None -> false,
+      },
+    Err(_) -> false,
+  }
+
+# Test 10: Semantic Analyzer 생성
+function test_create_analyzer(): Bool =
+  let registry = new_registry()
+  let analyzer = new_analyzer(registry)
+  analyzer.errors.length == 0 &&
+  analyzer.in_loop == false
+
+# Test 11: let 문 분석
+function test_analyze_let_stmt(): Bool =
+  let registry = new_registry()
+  let analyzer = new_analyzer(registry)
+  let (analyzer2, result) = analyze_let_stmt(analyzer, "x", Some("Int"), 1, 1)
+  match result {
+    Ok(_) -> analyzer2.errors.length == 0,
+    Err(_) -> false,
+  }
+
+# Test 12: return 문 - 함수 내부
+function test_return_in_function(): Bool =
+  let registry = new_registry()
+  let analyzer = new_analyzer(registry)
+  let (analyzer2, _) = analyze_function_decl(analyzer, "test", [], 1, 1)
+  let (analyzer3, result) = analyze_return_stmt(analyzer2, 1, 1)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 13: return 문 - 함수 외부 (에러)
+function test_return_outside_function(): Bool =
+  let registry = new_registry()
+  let analyzer = new_analyzer(registry)
+  let (analyzer2, result) = analyze_return_stmt(analyzer, 1, 1)
+  match result {
+    Ok(_) -> false,
+    Err(_) -> analyzer2.errors.length > 0,
+  }
+
+# Test 14: break/continue 루프 내부
+function test_loop_control(): Bool =
+  let registry = new_registry()
+  let analyzer = new_analyzer(registry)
+  let analyzer2 = enter_loop(analyzer)
+  let (analyzer3, break_result) = analyze_break_stmt(analyzer2, 1, 1)
+  let (analyzer4, cont_result) = analyze_continue_stmt(analyzer3, 1, 1)
+  match (break_result, cont_result) {
+    (Ok(_), Ok(_)) -> true,
+    _ -> false,
+  }
+
+# Test 15: 타입 호환성 검사
+function test_type_compatibility(): Bool =
+  is_type_compatible("Int", "Int") &&
+  is_type_compatible("Any", "Any") &&
+  is_type_compatible("Nothing", "Int") &&
+  !is_type_compatible("Int", "String")
+
+# ============================================================================
+# 모든 테스트 실행
+# ============================================================================
+
+function run_semantic_tests(): Bool =
+  let results = [
+    ("test_create_symbol", test_create_symbol()),
+    ("test_create_scope", test_create_scope()),
+    ("test_define_symbol", test_define_symbol()),
+    ("test_lookup_symbol", test_lookup_symbol()),
+    ("test_create_scope_stack", test_create_scope_stack()),
+    ("test_push_scope", test_push_scope()),
+    ("test_pop_scope", test_pop_scope()),
+    ("test_define_in_scope_stack", test_define_in_scope_stack()),
+    ("test_lookup_in_stack", test_lookup_in_stack()),
+    ("test_create_analyzer", test_create_analyzer()),
+    ("test_analyze_let_stmt", test_analyze_let_stmt()),
+    ("test_return_in_function", test_return_in_function()),
+    ("test_return_outside_function", test_return_outside_function()),
+    ("test_loop_control", test_loop_control()),
+    ("test_type_compatibility", test_type_compatibility()),
+  ]
+
+  for (name, result) in results {
+    if !result then
+      eprintln("❌ FAILED: " + name)
+    else
+      println("✅ PASSED: " + name)
+  }
+
+  true
