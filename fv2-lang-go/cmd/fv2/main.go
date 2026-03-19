@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"fv2-lang/internal/codegen"
 	"fv2-lang/internal/lexer"
 	"fv2-lang/internal/parser"
 	"fv2-lang/internal/typechecker"
@@ -126,7 +127,17 @@ func compile(source string, tokensOnly bool) error {
 		return fmt.Errorf("type checking failed")
 	}
 	fmt.Printf("// Type checking: OK\n")
-	fmt.Printf("// C code generation: NOT YET IMPLEMENTED\n")
+
+	// Step 4: Code Generator
+	gen := codegen.New()
+	cCode, err := gen.Generate(program)
+	if err != nil {
+		return fmt.Errorf("code generation failed: %w", err)
+	}
+
+	fmt.Printf("// C code generation: OK\n")
+	fmt.Printf("\n// Generated C code:\n")
+	fmt.Printf("%s\n", cCode)
 
 	return nil
 }
