@@ -1,0 +1,114 @@
+// ============================================================
+// storage.fl - 불변 로그 저장소 (Append-Only)
+// ============================================================
+
+extern fn printf(fmt: string) -> i32;
+
+// -------------------------------------------------------
+// 해시 계산 (경량 체인 해시)
+// 실제 SHA256 없이 seq+key+value 조합으로 결정론적 해시 생성
+// -------------------------------------------------------
+fn compute_hash(seq: i64, key: string, value: string, prev_hash: string) -> string {
+    // 결정론적 해시: seq를 기반으로 정수 생성
+    // "H" + seq + "|" + key_length + "|" + value_length 형태
+    var h: i64 = seq * 31;
+    var i: i64 = 0;
+    // key 문자 순회 (char_at 내장 함수 사용)
+    var klen: i64 = length(key);
+    while (i < klen) {
+        var c: i64 = char_at(key, i);
+        h = h * 31 + c;
+        i = i + 1;
+    }
+    // value 문자 순회
+    i = 0;
+    var vlen: i64 = length(value);
+    while (i < vlen) {
+        var c: i64 = char_at(value, i);
+        h = h * 17 + c;
+        i = i + 1;
+    }
+    // 음수 방지
+    if (h < 0) {
+        h = h * -1;
+    }
+    return "H" + to_string(h);
+}
+
+// -------------------------------------------------------
+// log_init: 저장소 초기화
+// -------------------------------------------------------
+fn log_init(store: *LogStore) -> i64 {
+    store.count = 0;
+    store.next_seq = 1;
+    store.last_hash = "GENESIS";   // 최초 이전 해시 = GENESIS
+    return 0;
+}
+
+// -------------------------------------------------------
+// log_append: 새 레코드를 불변 로그에 추가
+// 반환: 성공 시 seq 번호, 실패 시 -1
+// -------------------------------------------------------
+fn log_append(store: *LogStore, op: i64, key: string, value: string, server_id: i64) -> i64 {
+    if (store.count >= MAX_RECORDS) {
+        println("ERROR: LogStore full");
+        return -1;
+    }
+
+    var idx: i64 = store.count;
+    var seq: i64 = store.next_seq;
+
+    // 레코드 채우기
+    store.records[idx].seq = seq;
+    store.records[idx].timestamp = seq * 1000;   // 시뮬레이션: seq당 1초
+    store.records[idx].op = op;
+    store.records[idx].key = key;
+    store.records[idx].value = value;
+    store.records[idx].server_id = server_id;
+    store.records[idx].prev_hash = store.last_hash;
+
+    // 삭제 마커 설정
+    if (op == OP_DELETE) {
+        store.records[idx].is_tombstone = 1;
+        store.records[idx].value = "";
+    } else {
+        store.records[idx].is_tombstone = 0;
+    }
+
+    // 해시 계산 & 체인 연결
+    var new_hash: string = compute_hash(seq, key, value, store.last_hash);
+    store.records[idx].hash = new_hash;
+    store.last_hash = new_hash;
+
+    // 카운터 갱신
+    store.count = store.count + 1;
+    store.next_seq = store.next_seq + 1;
+
+    return seq;
+}
+
+// -------------------------------------------------------
+// log_get_by_seq: seq 번호로 레코드 조회
+// -------------------------------------------------------
+fn log_get_by_seq(store: *LogStore, seq: i64) -> i64 {
+    var i: i64 = 0;
+    while (i < store.count) {
+        if (store.records[i].seq == seq) {
+            return i;   // 인덱스 반환
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+// -------------------------------------------------------
+// log_print_record: 단일 레코드 출력 (디버깅용)
+// -------------------------------------------------------
+fn log_print_record(store: *LogStore, idx: i64) -> i64 {
+    println("  seq=" + to_string(store.records[idx].seq)
+        + " op=" + to_string(store.records[idx].op)
+        + " key=" + store.records[idx].key
+        + " val=" + store.records[idx].value
+        + " hash=" + store.records[idx].hash);
+    return 0;
+}

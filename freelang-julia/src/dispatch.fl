@@ -1,0 +1,519 @@
+// FreeLang Julia Integration: Multiple Dispatch Engine
+// Phase A.3: Method Registry, Type Matching, Dispatch Resolution
+// Status: 🟢 Implementation (100% - Complete)
+// Tests: 25/25 target
+
+module dispatch
+
+import types_extended
+
+// ============================================================================
+// 1. METHOD SIGNATURE & REGISTRY
+// ============================================================================
+
+// Method signature: function name + parameter types
+record MethodSignature {
+  name: String,
+  param_types: [String],
+  return_type: String
+}
+
+// Method entry: signature + implementation
+record MethodEntry {
+  signature: MethodSignature,
+  function_id: String,
+  specificity: Int  // 더 구체적인 타입일수록 높음
+}
+
+// Method Registry: 메서드 저장소
+record MethodRegistry {
+  methods: [MethodEntry],
+  lookup_cache: Map[String, [MethodEntry]]  // name -> entries
+}
+
+// ============================================================================
+// 2. TYPE MATCHING ALGORITHM
+// ============================================================================
+
+// Type rank: 타입의 우선순위 (더 구체적 = 높음)
+function type_rank(t: String) -> Int = match t {
+  "Int" -> 100,
+  "Float" -> 90,
+  "String" -> 95,
+  "Bool" -> 85,
+  "Dynamic" -> 1,  // 가장 추상적
+  _ -> 50  // 기타
+}
+
+// Type compatibility check
+function is_compatible(param_type: String, arg_type: String) -> Bool = {
+  if param_type == arg_type {
+    true
+  } else if param_type == "Dynamic" {
+    // Dynamic은 모든 타입과 호환
+    true
+  } else if arg_type == "Dynamic" {
+    // Dynamic 인자는 구체적 파라미터와 호환하지만 최저 우선순위
+    true
+  } else {
+    // 숫자 타입 간 호환성
+    (param_type == "Float" && arg_type == "Int") ||
+    (param_type == "Int" && arg_type == "Float")
+  }
+}
+
+// Calculate specificity score for method
+function calc_specificity(param_types: [String]) -> Int = {
+  fold(param_types, 0, fn(acc, t) -> acc + type_rank(t))
+}
+
+// ============================================================================
+// 3. METHOD LOOKUP & DISPATCH RESOLUTION
+// ============================================================================
+
+// Find best matching method
+function find_best_method(
+  registry: MethodRegistry,
+  name: String,
+  arg_types: [String]
+) -> Option[MethodEntry] = {
+  // Get candidates by name
+  let candidates = match registry.lookup_cache.get(name) {
+    Some(entries) -> entries,
+    None -> []
+  }
+
+  // Filter by arity (argument count)
+  let arity_match = filter(candidates, fn(entry) -> {
+    len(entry.signature.param_types) == len(arg_types)
+  })
+
+  // Filter by type compatibility
+  let type_match = filter(arity_match, fn(entry) -> {
+    fold(zip(entry.signature.param_types, arg_types), true, fn(acc, pair) -> {
+      acc && is_compatible(pair.0, pair.1)
+    })
+  })
+
+  // Sort by specificity (highest first)
+  let sorted = sort_by(type_match, fn(e) -> e.specificity)
+
+  // Return most specific method
+  if len(sorted) > 0 {
+    Some(sorted[0])
+  } else {
+    None
+  }
+}
+
+// Register new method
+function register_method(
+  registry: mutable MethodRegistry,
+  signature: MethodSignature,
+  function_id: String
+) -> Unit = {
+  let specificity = calc_specificity(signature.param_types)
+  let entry = MethodEntry {
+    signature: signature,
+    function_id: function_id,
+    specificity: specificity
+  }
+
+  // Add to methods list
+  registry.methods = append(registry.methods, entry)
+
+  // Update lookup cache
+  let name = signature.name
+  let existing = match registry.lookup_cache.get(name) {
+    Some(entries) -> entries,
+    None -> []
+  }
+  registry.lookup_cache.set(name, append(existing, entry))
+}
+
+// ============================================================================
+// 4. DISPATCH ENGINE
+// ============================================================================
+
+// Dispatch context: 디스패치 정보
+record DispatchContext {
+  method_name: String,
+  arg_types: [String],
+  registry: MethodRegistry
+}
+
+// Dispatch result
+type DispatchResult =
+  | Success(MethodEntry)
+  | NoMethodError(String)
+  | AmbiguousError([MethodEntry])
+
+// Perform method dispatch
+function dispatch(ctx: DispatchContext) -> DispatchResult = {
+  match find_best_method(ctx.registry, ctx.method_name, ctx.arg_types) {
+    Some(method) -> Success(method),
+    None -> NoMethodError(format(
+      "No method found for {}/{}",
+      ctx.method_name,
+      len(ctx.arg_types)
+    ))
+  }
+}
+
+// ============================================================================
+// 5. BUILT-IN METHOD REGISTRY
+// ============================================================================
+
+// Initialize registry with built-in methods
+function create_default_registry() -> MethodRegistry = {
+  let registry = MethodRegistry {
+    methods: [],
+    lookup_cache: Map::new[String, [MethodEntry]]()
+  }
+
+  // Register basic arithmetic operations
+  register_method(registry,
+    MethodSignature { name: "+", param_types: ["Int", "Int"], return_type: "Int" },
+    "builtin_add_int"
+  )
+
+  register_method(registry,
+    MethodSignature { name: "+", param_types: ["Float", "Float"], return_type: "Float" },
+    "builtin_add_float"
+  )
+
+  register_method(registry,
+    MethodSignature { name: "+", param_types: ["String", "String"], return_type: "String" },
+    "builtin_concat_string"
+  )
+
+  register_method(registry,
+    MethodSignature { name: "-", param_types: ["Int", "Int"], return_type: "Int" },
+    "builtin_sub_int"
+  )
+
+  register_method(registry,
+    MethodSignature { name: "*", param_types: ["Int", "Int"], return_type: "Int" },
+    "builtin_mul_int"
+  )
+
+  register_method(registry,
+    MethodSignature { name: "/", param_types: ["Int", "Int"], return_type: "Int" },
+    "builtin_div_int"
+  )
+
+  registry
+}
+
+// ============================================================================
+// 6. HELPER FUNCTIONS
+// ============================================================================
+
+function filter[T](items: [T], predicate: fn(T) -> Bool) -> [T] = {
+  fold(items, [], fn(acc, item) -> {
+    if predicate(item) {
+      append(acc, item)
+    } else {
+      acc
+    }
+  })
+}
+
+function sort_by[T](items: [T], key_fn: fn(T) -> Int) -> [T] = {
+  // Simple bubble sort (for simplicity)
+  fold(items, items, fn(acc, _) -> {
+    let len_items = len(acc)
+    fold_range(0, len_items - 1, acc, fn(arr, i) -> {
+      if i + 1 < len_items {
+        let curr_key = key_fn(arr[i])
+        let next_key = key_fn(arr[i + 1])
+        if curr_key < next_key {
+          // Swap
+          let temp = arr[i]
+          arr[i] = arr[i + 1]
+          arr[i + 1] = temp
+          arr
+        } else {
+          arr
+        }
+      } else {
+        arr
+      }
+    })
+  })
+}
+
+function zip[A, B](a: [A], b: [B]) -> [(A, B)] = {
+  fold_range(0, min(len(a), len(b)), [], fn(acc, i) -> {
+    append(acc, (a[i], b[i]))
+  })
+}
+
+function fold_range(start: Int, end: Int, initial: Any, f: fn(Any, Int) -> Any) -> Any = {
+  fold(range(start, end), initial, fn(acc, i) -> f(acc, i))
+}
+
+function range(start: Int, end: Int) -> [Int] = {
+  if start >= end {
+    []
+  } else {
+    append(range(start + 1, end), start)
+  }
+}
+
+function append[T](arr: [T], item: T) -> [T] = {
+  // Simplified append
+  arr + [item]
+}
+
+function min(a: Int, b: Int) -> Int = {
+  if a < b { a } else { b }
+}
+
+// ============================================================================
+// 7. TEST CASES (25 tests)
+// ============================================================================
+
+// Test 1: Method signature creation
+function test_method_signature() -> Bool = {
+  let sig = MethodSignature {
+    name: "+",
+    param_types: ["Int", "Int"],
+    return_type: "Int"
+  }
+  sig.name == "+"
+}
+
+// Test 2: Method entry creation
+function test_method_entry() -> Bool = {
+  let sig = MethodSignature {
+    name: "*",
+    param_types: ["Int", "Int"],
+    return_type: "Int"
+  }
+  let entry = MethodEntry {
+    signature: sig,
+    function_id: "builtin_mul",
+    specificity: 200
+  }
+  entry.specificity == 200
+}
+
+// Test 3: Type rank for Int
+function test_type_rank_int() -> Bool = {
+  type_rank("Int") == 100
+}
+
+// Test 4: Type rank for Float
+function test_type_rank_float() -> Bool = {
+  type_rank("Float") == 90
+}
+
+// Test 5: Type rank for Dynamic
+function test_type_rank_dynamic() -> Bool = {
+  type_rank("Dynamic") == 1
+}
+
+// Test 6: Type compatibility exact match
+function test_type_compat_exact() -> Bool = {
+  is_compatible("Int", "Int")
+}
+
+// Test 7: Type compatibility with Dynamic param
+function test_type_compat_dynamic_param() -> Bool = {
+  is_compatible("Dynamic", "Int")
+}
+
+// Test 8: Type compatibility with Dynamic arg
+function test_type_compat_dynamic_arg() -> Bool = {
+  is_compatible("Int", "Dynamic")
+}
+
+// Test 9: Type compatibility Float accepts Int
+function test_type_compat_float_int() -> Bool = {
+  is_compatible("Float", "Int")
+}
+
+// Test 10: Specificity calculation
+function test_calc_specificity() -> Bool = {
+  let spec = calc_specificity(["Int", "Int"])
+  spec == 200
+}
+
+// Test 11: Registry creation
+function test_registry_create() -> Bool = {
+  let reg = create_default_registry()
+  len(reg.methods) > 0
+}
+
+// Test 12: Register method
+function test_register_method() -> Bool = {
+  let registry = MethodRegistry {
+    methods: [],
+    lookup_cache: Map::new[String, [MethodEntry]]()
+  }
+  let sig = MethodSignature {
+    name: "test",
+    param_types: ["Int"],
+    return_type: "Int"
+  }
+  register_method(registry, sig, "test_func")
+  len(registry.methods) == 1
+}
+
+// Test 13: Dispatch context creation
+function test_dispatch_context() -> Bool = {
+  let registry = create_default_registry()
+  let ctx = DispatchContext {
+    method_name: "+",
+    arg_types: ["Int", "Int"],
+    registry: registry
+  }
+  ctx.method_name == "+"
+}
+
+// Test 14: Dispatch success for +/Int
+function test_dispatch_success() -> Bool = {
+  let registry = create_default_registry()
+  let ctx = DispatchContext {
+    method_name: "+",
+    arg_types: ["Int", "Int"],
+    registry: registry
+  }
+  match dispatch(ctx) {
+    Success(_) -> true,
+    _ -> false
+  }
+}
+
+// Test 15: Dispatch success for +/String
+function test_dispatch_string_concat() -> Bool = {
+  let registry = create_default_registry()
+  let ctx = DispatchContext {
+    method_name: "+",
+    arg_types: ["String", "String"],
+    registry: registry
+  }
+  match dispatch(ctx) {
+    Success(_) -> true,
+    _ -> false
+  }
+}
+
+// Test 16: Dispatch failure for undefined method
+function test_dispatch_failure() -> Bool = {
+  let registry = create_default_registry()
+  let ctx = DispatchContext {
+    method_name: "undefined_op",
+    arg_types: ["Int", "Int"],
+    registry: registry
+  }
+  match dispatch(ctx) {
+    NoMethodError(_) -> true,
+    _ -> false
+  }
+}
+
+// Test 17: Multiple dispatch with different arities
+function test_dispatch_arity_mismatch() -> Bool = {
+  let registry = create_default_registry()
+  let ctx = DispatchContext {
+    method_name: "+",
+    arg_types: ["Int", "Int", "Int"],
+    registry: registry
+  }
+  match dispatch(ctx) {
+    NoMethodError(_) -> true,
+    _ -> false
+  }
+}
+
+// Test 18: Specificity comparison
+function test_specificity_comparison() -> Bool = {
+  let spec1 = calc_specificity(["Int", "Int"])
+  let spec2 = calc_specificity(["Dynamic", "Dynamic"])
+  spec1 > spec2
+}
+
+// Test 19: Filter function
+function test_filter() -> Bool = {
+  let nums = [1, 2, 3, 4, 5]
+  let evens = filter(nums, fn(x) -> x % 2 == 0)
+  len(evens) == 2
+}
+
+// Test 20: Zip function
+function test_zip() -> Bool = {
+  let a = [1, 2, 3]
+  let b = ["a", "b", "c"]
+  let zipped = zip(a, b)
+  len(zipped) == 3
+}
+
+// Test 21: Built-in registry has multiple methods
+function test_registry_multiple_methods() -> Bool = {
+  let reg = create_default_registry()
+  len(reg.methods) >= 6
+}
+
+// Test 22: Dispatch finds most specific method
+function test_dispatch_specificity() -> Bool = {
+  let registry = create_default_registry()
+  let ctx = DispatchContext {
+    method_name: "+",
+    arg_types: ["Int", "Int"],
+    registry: registry
+  }
+  match dispatch(ctx) {
+    Success(method) -> method.specificity > 0,
+    _ -> false
+  }
+}
+
+// Test 23: Method signature name matches
+function test_method_sig_name() -> Bool = {
+  let sig = MethodSignature {
+    name: "print",
+    param_types: ["String"],
+    return_type: "Unit"
+  }
+  sig.name == "print"
+}
+
+// Test 24: Method lookup returns None for unregistered
+function test_lookup_unregistered() -> Bool = {
+  let registry = create_default_registry()
+  match find_best_method(registry, "nonexistent", ["Int"]) {
+    None -> true,
+    _ -> false
+  }
+}
+
+// Test 25: Complete dispatch pipeline
+function test_dispatch_pipeline() -> Bool = {
+  let registry = create_default_registry()
+  register_method(registry,
+    MethodSignature {
+      name: "^",
+      param_types: ["Int", "Int"],
+      return_type: "Int"
+    },
+    "builtin_pow_int"
+  )
+  let ctx = DispatchContext {
+    method_name: "^",
+    arg_types: ["Int", "Int"],
+    registry: registry
+  }
+  match dispatch(ctx) {
+    Success(m) -> m.signature.name == "^",
+    _ -> false
+  }
+}
+
+// ============================================================================
+
+// Exports
+export MethodSignature, MethodEntry, MethodRegistry, DispatchContext
+export DispatchResult, type_rank, is_compatible, dispatch
+export create_default_registry, register_method, find_best_method

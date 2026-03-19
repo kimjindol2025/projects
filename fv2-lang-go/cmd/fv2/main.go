@@ -9,6 +9,7 @@ import (
 
 	"fv2-lang/internal/lexer"
 	"fv2-lang/internal/parser"
+	"fv2-lang/internal/typechecker"
 )
 
 func main() {
@@ -108,13 +109,23 @@ func compile(source string, tokensOnly bool) error {
 		return fmt.Errorf("parsing failed: %w", err)
 	}
 
-	// Step 3: Type Checker (TODO)
-	// Step 4: Code Generator (TODO)
+	// Step 3: Type Checker
+	checker := typechecker.New()
+	typeErrors, _ := checker.Check(program)
+	hasTypeErrors := len(typeErrors) > 0
 
 	fmt.Printf("// FV 2.0 Compiler\n")
 	fmt.Printf("// Tokenized %d tokens\n", len(tokens))
 	fmt.Printf("// Parsed: %d definitions, %d statements in main\n", len(program.Definitions), len(program.MainBody))
-	fmt.Printf("// Type checking: NOT YET IMPLEMENTED\n")
+
+	if hasTypeErrors {
+		fmt.Printf("// Type checking: %d error(s)\n", len(typeErrors))
+		for _, e := range typeErrors {
+			fmt.Printf("// %s\n", e.String())
+		}
+		return fmt.Errorf("type checking failed")
+	}
+	fmt.Printf("// Type checking: OK\n")
 	fmt.Printf("// C code generation: NOT YET IMPLEMENTED\n")
 
 	return nil

@@ -1,0 +1,110 @@
+// ============================================================
+// types.fl - Mandate-DB 핵심 타입 정의
+// ============================================================
+
+// 작업 타입 상수 (불변)
+let OP_SET: i64    = 1;   // 삽입/수정
+let OP_DELETE: i64 = 2;   // 논리 삭제 (로그에 기록)
+let OP_SCAN: i64   = 3;   // 범위 읽기
+let OP_SNAP: i64   = 4;   // 스냅샷 명령
+
+// 서버 상태 상수
+let SRV_ALIVE: i64 = 1;
+let SRV_DEAD: i64  = 0;
+
+// 최대 크기 상수
+let MAX_RECORDS: i64  = 10000;
+let MAX_SERVERS: i64  = 2;
+let KEY_SIZE: i64     = 64;
+let HASH_SIZE: i64    = 32;
+
+// -------------------------------------------------------
+// MandateRecord: 불변 로그의 한 줄
+// 모든 쓰기 작업은 이 구조체로 저장됨
+// -------------------------------------------------------
+struct MandateRecord {
+    seq: i64,         // 시퀀스 번호 (단조 증가, 절대 중복 없음)
+    timestamp: i64,   // 에폭 밀리초 (시뮬레이션용 정수)
+    op: i64,          // 작업 타입: OP_SET, OP_DELETE
+    key: string,      // 키 (최대 64자)
+    value: string,    // 값 (OP_DELETE 시 빈 문자열)
+    prev_hash: string, // 이전 레코드의 해시 (체인 연결)
+    hash: string,     // 이 레코드의 해시 (SHA 시뮬레이션)
+    server_id: i64,   // 어느 서버가 기록했는지 (253=서버A, 73=서버B)
+    is_tombstone: i64, // 1 = 삭제 마커
+}
+
+// -------------------------------------------------------
+// LogStore: 불변 로그 전체를 메모리에 보유
+// -------------------------------------------------------
+struct LogStore {
+    records: [MandateRecord],
+    count: i64,
+    next_seq: i64,
+    last_hash: string,    // 최신 레코드 해시 (체인 tail)
+}
+
+// -------------------------------------------------------
+// ServerState: 각 서버(253/73)의 상태
+// -------------------------------------------------------
+struct ServerState {
+    server_id: i64,
+    status: i64,          // SRV_ALIVE / SRV_DEAD
+    log: LogStore,
+    last_sync_seq: i64,   // 마지막 동기화된 seq 번호
+    pending_count: i64,   // 미동기화 레코드 수
+}
+
+// -------------------------------------------------------
+// QueryResult: 쿼리 결과 래퍼
+// -------------------------------------------------------
+struct QueryResult {
+    found: i64,       // 1 = 발견, 0 = 없음
+    key: string,
+    value: string,
+    timestamp: i64,
+    seq: i64,
+}
+
+// -------------------------------------------------------
+// IntegrityReport: 무결성 검증 보고서
+// -------------------------------------------------------
+struct IntegrityReport {
+    total_checked: i64,
+    chain_ok: i64,        // 체인이 끊기지 않은 레코드 수
+    chain_broken: i64,    // 체인이 끊긴 레코드 수 (위변조 의심)
+    first_broken_seq: i64, // 최초 체인 파괴 지점
+    hash_collision: i64,  // 해시 충돌 수
+    tombstone_count: i64, // 삭제 마커 수
+    pass: i64,            // 1 = 전체 통과
+}
+
+// -------------------------------------------------------
+// ReplicationState: 복제 상태 추적
+// -------------------------------------------------------
+struct ReplicationState {
+    primary: ServerState,    // 서버 253
+    replica: ServerState,    // 서버 73
+    sync_lag: i64,           // 복제 지연 (레코드 수)
+    total_synced: i64,       // 누적 동기화 레코드 수
+    sync_failures: i64,      // 동기화 실패 수
+}
+
+// -------------------------------------------------------
+// SnapshotEntry: 스냅샷의 단일 키-값 쌍
+// -------------------------------------------------------
+struct SnapshotEntry {
+    key: string,
+    value: string,
+    last_seq: i64,
+    last_ts: i64,
+}
+
+// -------------------------------------------------------
+// Snapshot: 특정 시점의 전체 상태
+// -------------------------------------------------------
+struct Snapshot {
+    timestamp: i64,
+    entries: [SnapshotEntry],
+    count: i64,
+}

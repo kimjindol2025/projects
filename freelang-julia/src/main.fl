@@ -1,0 +1,131 @@
+// FreeLang Julia Compiler v0.1.0 - Main Entry Point
+// Ported from: Julia Compiler (Go) v0.2.0
+
+module main
+
+// Phase 0: 모듈 선언
+import lexer
+import parser
+import types
+import sema
+import ir
+import codegen
+import optimizer
+import vm
+
+// CompileResult: 컴파일 결과
+record CompileResult {
+    success: Bool,
+    bytecode: Bytecode,
+    errors: [String],
+}
+
+// compile: 전체 컴파일 파이프라인
+function compile(source: String, debug: Bool) -> Result[Bytecode, String] {
+    if debug {
+        println("🐛 디버그 모드 활성화")
+    }
+
+    // Phase 1: Lexing
+    match phaseRun("Lexing", debug) {
+        fn() -> {
+            let lex = lexer::new(source)
+            match lex::tokenize() {
+                Ok(tokens) -> {
+                    if debug {
+                        println(`  ✓ ${len(tokens)} tokens`)
+                    }
+                    Ok(tokens)
+                }
+                Err(e) -> Err(format("lexing error: {}", e))
+            }
+        }
+    } {
+        Ok(tokens) -> {
+            // Phase 2: Parsing
+            match phaseRun("Parsing", debug) {
+                fn() -> {
+                    let p = parser::new(tokens)
+                    match p::parse() {
+                        Ok(program) -> {
+                            if debug {
+                                println(`  ✓ Parsed ${len(program.statements)} statements`)
+                            }
+                            Ok(program)
+                        }
+                        Err(e) -> Err(format("parsing error: {}", e))
+                    }
+                }
+            } {
+                Ok(program) -> {
+                    // Phase 3: Semantic Analysis
+                    match phaseRun("Semantic Analysis", debug) {
+                        fn() -> {
+                            let analyzer = sema::new_analyzer()
+                            match analyzer.analyze(program) {
+                                Ok(_) -> {
+                                    if debug {
+                                        println("  ✓ Semantic analysis passed")
+                                    }
+                                    Ok(program)
+                                }
+                                Err(e) -> Err(format("semantic analysis error: {}", e))
+                            }
+                        }
+                    } {
+                        Ok(checked_program) -> {
+                            // Phase 4: IR Generation
+                            match phaseRun("IR Generation", debug) {
+                                fn() -> {
+                                    let builder = ir::new_builder()
+                                    match builder.build(checked_program) {
+                                        Ok(ir_module) -> {
+                                            if debug {
+                                                println(`  ✓ Generated IR module with ${len(ir_module.functions)} functions`)
+                                            }
+                                            Ok(ir_module)
+                                        }
+                                        Err(e) -> Err(format("IR generation error: {}", e))
+                                    }
+                                }
+                            } {
+                                Ok(ir_module) -> {
+                                    // Phase 5: Type Inference
+                                    // Phase 6: Optimization
+                                    // Phase 7: Code Generation
+                                    // Phase 8: VM Execution
+                                    // ... 다음 Phase 구현
+                                    Err("Phase 5-8 구현 필요".to_string())
+                                }
+                                Err(e) -> Err(e)
+                            }
+                        }
+                        Err(e) -> Err(e)
+                    }
+                }
+                Err(e) -> Err(e)
+            }
+        }
+        Err(e) -> Err(e)
+    }
+}
+
+// phaseRun: Phase 실행 및 로깅
+function phaseRun(phaseName: String, debug: Bool) -> fn() -> Result[Any, String] {
+    fn() -> Result[Any, String] {
+        if debug {
+            println(`Phase: ${phaseName}...`)
+        }
+        Ok(nil)
+    }
+}
+
+// 진입점
+function main() {
+    // 테스트: 간단한 컴파일
+    let source = "2 + 3"
+    match compile(source, true) {
+        Ok(bytecode) -> println("✅ 컴파일 성공"),
+        Err(e) -> println(`❌ 컴파일 오류: ${e}`)
+    }
+}

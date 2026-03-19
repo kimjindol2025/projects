@@ -50,18 +50,37 @@ func (b *Builder) buildStmt(stmt ast.Stmt) error {
 	}
 }
 
-// buildFunctionDecl builds a function declaration
-func (b *Builder) buildFunctionDecl(fd *ast.FunctionDecl) error {
-	// Create function
-	params := []Value{}
-	for _, param := range fd.Parameters {
-		params = append(params, Value{
+// buildFunctionParameters 헬퍼: Parameter 루프 추출 (Issue #3)
+func (b *Builder) buildFunctionParameters(params []*ast.Parameter) []Value {
+	values := make([]Value, len(params))
+	for i, param := range params {
+		values[i] = Value{
 			ID:   b.nextValID,
 			Name: param.Name,
 			Type: "i64", // Simplified: assume i64
-		})
+		}
 		b.nextValID++
 	}
+	return values
+}
+
+// buildCallArguments 헬퍼: Call argument 루프 추출 (Issue #4)
+func (b *Builder) buildCallArguments(arguments []ast.Expr) ([]Value, error) {
+	args := make([]Value, 0, len(arguments))
+	for _, arg := range arguments {
+		val, err := b.buildExpr(arg)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, val)
+	}
+	return args, nil
+}
+
+// buildFunctionDecl builds a function declaration
+func (b *Builder) buildFunctionDecl(fd *ast.FunctionDecl) error {
+	// Create function (Issue #3: buildFunctionParameters 헬퍼 사용)
+	params := b.buildFunctionParameters(fd.Parameters)
 
 	fn := NewFunction(fd.Name, "i64", params)
 	b.currFunc = fn
@@ -167,13 +186,10 @@ func (b *Builder) buildExpr(expr ast.Expr) (Value, error) {
 		return unaryOp.Result, nil
 
 	case *ast.Call:
-		args := []Value{}
-		for _, arg := range e.Arguments {
-			val, err := b.buildExpr(arg)
-			if err != nil {
-				return Value{}, err
-			}
-			args = append(args, val)
+		// Issue #4: buildCallArguments 헬퍼로 argument 루프 추출
+		args, err := b.buildCallArguments(e.Arguments)
+		if err != nil {
+			return Value{}, err
 		}
 
 		fnName := ""

@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -26,6 +25,40 @@ const (
 ╚═══════════════════════════════════╝
 `
 )
+
+// PhaseLogger 헬퍼: Phase 로깅 반복 제거 (Issue #1)
+type PhaseLogger struct {
+	debug bool
+}
+
+func NewPhaseLogger(debug bool) *PhaseLogger {
+	return &PhaseLogger{debug: debug}
+}
+
+func (pl *PhaseLogger) Run(phaseName string, fn func() (string, error)) error {
+	if pl.debug {
+		fmt.Printf("Phase: %s...\n", phaseName)
+	}
+
+	msg, err := fn()
+	if err != nil {
+		return fmt.Errorf("%s error: %v", phaseName, err)
+	}
+
+	if pl.debug && msg != "" {
+		fmt.Printf("  ✓ %s\n", msg)
+	}
+	return nil
+}
+
+// readSourceFile 헬퍼: 파일 읽기 에러 처리 중복 제거 (Issue #2)
+func readSourceFile(filename string) (string, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return "", fmt.Errorf("cannot read file: %w", err)
+	}
+	return string(data), nil
+}
 
 func main() {
 	// 플래그 정의
@@ -67,15 +100,15 @@ func main() {
 		*outputFile = inputFile[:len(inputFile)-len(ext)] + ".out"
 	}
 
-	// 파일 읽기
-	source, err := ioutil.ReadFile(inputFile)
+	// 파일 읽기 (Issue #2: readSourceFile 헬퍼 사용)
+	source, err := readSourceFile(inputFile)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "오류: 파일을 읽을 수 없습니다: %v\n", err)
+		fmt.Fprintf(os.Stderr, "오류: %v\n", err)
 		os.Exit(1)
 	}
 
 	// 컴파일 파이프라인
-	if err := compile(string(source), *debugFlag); err != nil {
+	if err := compile(source, *debugFlag); err != nil {
 		fmt.Fprintf(os.Stderr, "컴파일 오류: %v\n", err)
 		os.Exit(1)
 	}
@@ -88,106 +121,96 @@ func compile(source string, debug bool) error {
 		fmt.Println("🐛 디버그 모드 활성화")
 	}
 
+	logger := NewPhaseLogger(debug)
+	var tokens []lexer.Token
+	var program *parser.Program
+	var irModule *ir.Module
+	var bytecode *codegen.Bytecode
+
 	// Phase 1: Lexing
-	if debug {
-		fmt.Println("Phase 1: Lexing...")
-	}
-	lex := lexer.New(source)
-	tokens, err := lex.Tokenize()
-	if err != nil {
-		return fmt.Errorf("lexing error: %v", err)
-	}
-	if debug {
-		fmt.Printf("  ✓ %d tokens\n", len(tokens))
+	if err := logger.Run("Lexing", func() (string, error) {
+		lex := lexer.New(source)
+		var e error
+		tokens, e = lex.Tokenize()
+		return fmt.Sprintf("%d tokens", len(tokens)), e
+	}); err != nil {
+		return err
 	}
 
 	// Phase 2: Parsing
-	if debug {
-		fmt.Println("Phase 2: Parsing...")
-	}
-	p := parser.New(tokens)
-	program, err := p.Parse()
-	if err != nil {
-		return fmt.Errorf("parsing error: %v", err)
-	}
-	if debug {
-		fmt.Printf("  ✓ Parsed %d statements\n", len(program.Statements))
+	if err := logger.Run("Parsing", func() (string, error) {
+		p := parser.New(tokens)
+		var e error
+		program, e = p.Parse()
+		if program == nil {
+			return "", e
+		}
+		return fmt.Sprintf("Parsed %d statements", len(program.Statements)), e
+	}); err != nil {
+		return err
 	}
 
 	// Phase 3: Semantic Analysis
-	if debug {
-		fmt.Println("Phase 3: Semantic Analysis...")
-	}
-	analyzer := sema.NewAnalyzer()
-	_, err = analyzer.Analyze(program)
-	if err != nil {
-		return fmt.Errorf("semantic analysis error: %v", err)
-	}
-	if debug {
-		fmt.Println("  ✓ Semantic analysis passed")
+	if err := logger.Run("Semantic Analysis", func() (string, error) {
+		analyzer := sema.NewAnalyzer()
+		_, e := analyzer.Analyze(program)
+		return "Semantic analysis passed", e
+	}); err != nil {
+		return err
 	}
 
-	// Phase 5: IR Generation
-	if debug {
-		fmt.Println("Phase 5: IR Generation...")
-	}
-	builder := ir.NewBuilder()
-	irModule, err := builder.Build(program)
-	if err != nil {
-		return fmt.Errorf("IR generation error: %v", err)
-	}
-	if debug {
-		fmt.Printf("  ✓ Generated IR module with %d functions\n", len(irModule.Functions))
-	}
-
-	// Phase 6: Type Inference
-	if debug {
-		fmt.Println("Phase 6: Type Inference...")
-	}
-	inferrer := typeinf.NewInferrer(irModule)
-	if err := inferrer.Infer(); err != nil {
-		return fmt.Errorf("type inference error: %v", err)
-	}
-	if debug {
-		fmt.Println("  ✓ Type inference complete")
+	// Phase 4: IR Generation
+	if err := logger.Run("IR Generation", func() (string, error) {
+		builder := ir.NewBuilder()
+		var e error
+		irModule, e = builder.Build(program)
+		if irModule == nil {
+			return "", e
+		}
+		return fmt.Sprintf("Generated IR module with %d functions", len(irModule.Functions)), e
+	}); err != nil {
+		return err
 	}
 
-	// Phase 7: Optimization
-	if debug {
-		fmt.Println("Phase 7: Optimization...")
-	}
-	opt := optimizer.NewOptimizer(irModule)
-	if err := opt.Optimize(); err != nil {
-		return fmt.Errorf("optimization error: %v", err)
-	}
-	if debug {
-		fmt.Println("  ✓ Optimization complete")
+	// Phase 5: Type Inference
+	if err := logger.Run("Type Inference", func() (string, error) {
+		inferrer := typeinf.NewInferrer(irModule)
+		return "Type inference complete", inferrer.Infer()
+	}); err != nil {
+		return err
 	}
 
-	// Phase 8: Codegen
-	if debug {
-		fmt.Println("Phase 8: Code Generation...")
-	}
-	cg := codegen.NewCodegen(irModule)
-	bytecode, err := cg.Generate()
-	if err != nil {
-		return fmt.Errorf("code generation error: %v", err)
-	}
-	if debug {
-		fmt.Printf("  ✓ Generated %d bytes of bytecode\n", len(bytecode.Code))
+	// Phase 6: Optimization
+	if err := logger.Run("Optimization", func() (string, error) {
+		opt := optimizer.NewOptimizer(irModule)
+		return "Optimization complete", opt.Optimize()
+	}); err != nil {
+		return err
 	}
 
-	// Phase 8b: VM Execution
-	if debug {
-		fmt.Println("Phase 8b: Execution...")
+	// Phase 7: Code Generation
+	if err := logger.Run("Code Generation", func() (string, error) {
+		cg := codegen.NewCodegen(irModule)
+		var e error
+		bytecode, e = cg.Generate()
+		if bytecode == nil {
+			return "", e
+		}
+		return fmt.Sprintf("Generated %d bytes of bytecode", len(bytecode.Code)), e
+	}); err != nil {
+		return err
 	}
-	vm := codegen.NewVM(bytecode)
-	result, err := vm.Run()
-	if err != nil {
-		return fmt.Errorf("execution error: %v", err)
-	}
-	if debug {
-		fmt.Printf("  ✓ Execution complete (result: %v)\n", result)
+
+	// Phase 8: VM Execution
+	if err := logger.Run("Execution", func() (string, error) {
+		vm := codegen.NewVM(bytecode)
+		result, e := vm.Run()
+		if e != nil {
+			return "", e
+		}
+		return fmt.Sprintf("Execution complete (result: %v)", result), nil
+	}); err != nil {
+		return err
 	}
 
 	return nil
