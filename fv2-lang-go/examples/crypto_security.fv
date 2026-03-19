@@ -1,0 +1,289 @@
+// Crypto 보안 예제 - FV 2.0 with Crypto Library
+// 암호화, JWT, TLS 및 보안 기능
+
+// 해시 결과
+struct HashResult {
+    algorithm: string
+    data: string
+    hex_string: string
+    base64: string
+    timestamp: string
+}
+
+// 암호화된 데이터
+struct EncryptedData {
+    algorithm: string
+    data: string
+    nonce: string
+    tag: string
+    timestamp: string
+}
+
+// 복호화된 데이터
+struct DecryptedData {
+    data: string
+    timestamp: string
+    success: bool
+}
+
+// JWT 토큰
+struct JwtToken {
+    header: string
+    payload: string
+    signature: string
+    valid: bool
+    expires_at: string
+    issued_at: string
+}
+
+// JWT 클레임
+struct JwtClaims {
+    subject: string
+    issuer: string
+    audience: string
+    expires_at: string
+    issued_at: string
+    not_before: string
+    jwt_id: string
+}
+
+// TLS 인증서
+struct TlsCertificate {
+    id: i64
+    subject: string
+    issuer: string
+    valid_from: string
+    valid_to: string
+    public_key: string
+    thumbprint: string
+    algorithm: string
+}
+
+// 암호화 키
+struct CryptoKey {
+    id: i64
+    type: string
+    algorithm: string
+    created_at: string
+    expires_at: string
+    revoked: bool
+}
+
+// 암호 강도 검사
+struct PasswordStrength {
+    length: bool
+    uppercase: bool
+    lowercase: bool
+    numbers: bool
+    special: bool
+    score: i64
+}
+
+// SHA256 해시
+fn hash_sha256(data: string) HashResult {
+    let hash = HashResult {
+        algorithm: "sha256",
+        data: data,
+        hex_string: "abc123...",
+        base64: "YWJjMTIz...",
+        timestamp: "2026-03-19T12:34:56"
+    }
+    return hash
+}
+
+// SHA512 해시
+fn hash_sha512(data: string) HashResult {
+    let hash = HashResult {
+        algorithm: "sha512",
+        data: data,
+        hex_string: "def456...",
+        base64: "ZGVmNDU2...",
+        timestamp: "2026-03-19T12:34:56"
+    }
+    return hash
+}
+
+// HMAC 생성
+fn hmac_sha256(data: string, key: string) HashResult {
+    let hmac = HashResult {
+        algorithm: "hmac-sha256",
+        data: data,
+        hex_string: "ghi789...",
+        base64: "Z2hpNzg5...",
+        timestamp: "2026-03-19T12:34:56"
+    }
+    return hmac
+}
+
+// HMAC 검증
+fn verify_hmac(data: string, signature: string, key: string) bool {
+    // HMAC 검증 로직
+    return true
+}
+
+// AES-256 암호화
+fn encrypt_aes256(data: string, key: string) EncryptedData {
+    let encrypted = EncryptedData {
+        algorithm: "aes-256-gcm",
+        data: "encrypted_data_base64",
+        nonce: "nonce_base64",
+        tag: "tag_base64",
+        timestamp: "2026-03-19T12:34:56"
+    }
+    return encrypted
+}
+
+// AES-256 복호화
+fn decrypt_aes256(encrypted: EncryptedData, key: string) DecryptedData {
+    let decrypted = DecryptedData {
+        data: "original_data",
+        timestamp: "2026-03-19T12:34:56",
+        success: true
+    }
+    return decrypted
+}
+
+// 랜덤 키 생성 (256비트)
+fn generate_random_key() string {
+    // 256비트 랜덤 키 생성
+    return "random_key_base64"
+}
+
+// 랜덤 바이트 생성
+fn generate_random_bytes(size: i64) string {
+    // 랜덤 바이트 생성
+    return "random_bytes"
+}
+
+// JWT 토큰 생성
+fn create_jwt_token(subject: string, issuer: string, secret: string) JwtToken {
+    let token = JwtToken {
+        header: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+        payload: "eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+        signature: "signature_value",
+        valid: true,
+        expires_at: "2026-12-31T23:59:59",
+        issued_at: "2026-03-19T12:34:56"
+    }
+    return token
+}
+
+// JWT 토큰 검증
+fn verify_jwt_token(token: string, secret: string) bool {
+    // JWT 검증 로직
+    return true
+}
+
+// TLS 인증서 추가
+fn add_tls_certificate(subject: string, issuer: string, valid_to: string) TlsCertificate {
+    let cert = TlsCertificate {
+        id: 1,
+        subject: subject,
+        issuer: issuer,
+        valid_from: "2026-03-19T12:34:56",
+        valid_to: valid_to,
+        public_key: "public_key_pem",
+        thumbprint: "sha256_thumbprint",
+        algorithm: "SHA256WithRSA"
+    }
+    return cert
+}
+
+// TLS 인증서 제거
+fn remove_tls_certificate(cert_id: i64) {
+    // 인증서 제거 로직
+}
+
+// 암호화 키 추가
+fn add_crypto_key(key_type: string, algorithm: string) CryptoKey {
+    let key = CryptoKey {
+        id: 1,
+        type: key_type,
+        algorithm: algorithm,
+        created_at: "2026-03-19T12:34:56",
+        expires_at: "2027-03-19T12:34:56",
+        revoked: false
+    }
+    return key
+}
+
+// 암호화 키 폐기
+fn revoke_crypto_key(key_id: i64) {
+    // 키 폐기 로직
+}
+
+// 보안 토큰 생성
+fn generate_secure_token(length: i64) string {
+    // 보안 토큰 생성 (hex)
+    return "secure_token_hex"
+}
+
+// 암호 강도 검사
+fn check_password_strength(password: string) PasswordStrength {
+    let strength = PasswordStrength {
+        length: true,
+        uppercase: true,
+        lowercase: true,
+        numbers: true,
+        special: true,
+        score: 5
+    }
+    return strength
+}
+
+// 메인 함수
+fn main() {
+    // SHA256 해시
+    let sha256_hash = hash_sha256("Hello World")
+
+    // SHA512 해시
+    let sha512_hash = hash_sha512("Hello World")
+
+    // HMAC 생성
+    let hmac = hmac_sha256("data", "secret_key")
+
+    // HMAC 검증
+    let hmac_valid = verify_hmac("data", "signature", "secret_key")
+
+    // 랜덤 키 생성
+    let random_key = generate_random_key()
+
+    // AES-256 암호화
+    let encrypted = encrypt_aes256("Secret Message", random_key)
+
+    // AES-256 복호화
+    let decrypted = decrypt_aes256(encrypted, random_key)
+
+    // JWT 토큰 생성
+    let jwt = create_jwt_token("user123", "app.example.com", random_key)
+
+    // JWT 토큰 검증
+    let jwt_valid = verify_jwt_token(jwt.signature, random_key)
+
+    // TLS 인증서 추가
+    let cert = add_tls_certificate(
+        "example.com",
+        "Let's Encrypt",
+        "2027-03-19T12:34:56"
+    )
+
+    // 암호화 키 추가
+    let key = add_crypto_key("symmetric", "AES256")
+
+    // 보안 토큰 생성
+    let token = generate_secure_token(32)
+
+    // 암호 강도 검사
+    let password_strength = check_password_strength("SecurePass123!@#")
+
+    // 암호 강도 확인
+    if password_strength.score >= 4 {
+        // 강력한 암호
+    }
+
+    // 인증서 제거
+    remove_tls_certificate(cert.id)
+
+    // 키 폐기
+    revoke_crypto_key(key.id)
+}
