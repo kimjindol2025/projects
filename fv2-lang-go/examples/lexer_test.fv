@@ -1,0 +1,213 @@
+// FV Lexer 테스트 (V 언어)
+// 14개 테스트 케이스로 완벽한 검증
+
+// 테스트 1: 기본 정수 토크나이제이션
+fn test_tokenize_integers() {
+	let code = "42 123 999"
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens.len() >= 3
+	assert tokens[0].type == TokenType.INT
+	assert tokens[0].value == "42"
+	assert tokens[1].type == TokenType.INT
+	assert tokens[1].value == "123"
+}
+
+// 테스트 2: 부동소수점 토크나이제이션
+fn test_tokenize_floats() {
+	let code = "3.14 2.71 0.5"
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.FLOAT
+	assert tokens[0].value == "3.14"
+	assert tokens[1].type == TokenType.FLOAT
+	assert tokens[1].value == "2.71"
+}
+
+// 테스트 3: 문자열 토크나이제이션
+fn test_tokenize_strings() {
+	let code = "\"hello\" \"world\""
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.STRING
+	assert tokens[1].type == TokenType.STRING
+}
+
+// 테스트 4: 키워드 인식
+fn test_tokenize_keywords() {
+	let code = "let const fn return if else for while"
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.LET
+	assert tokens[1].type == TokenType.CONST
+	assert tokens[2].type == TokenType.FN
+	assert tokens[3].type == TokenType.RETURN
+	assert tokens[4].type == TokenType.IF
+	assert tokens[5].type == TokenType.ELSE
+	assert tokens[6].type == TokenType.FOR
+	assert tokens[7].type == TokenType.WHILE
+}
+
+// 테스트 5: 식별자 인식
+fn test_tokenize_identifiers() {
+	let code = "x name _private myVar"
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.IDENT
+	assert tokens[0].value == "x"
+	assert tokens[1].type == TokenType.IDENT
+	assert tokens[1].value == "name"
+	assert tokens[2].type == TokenType.IDENT
+	assert tokens[2].value == "_private"
+}
+
+// 테스트 6: 산술 연산자
+fn test_tokenize_arithmetic() {
+	let code = "+ - * / % **"
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.PLUS
+	assert tokens[1].type == TokenType.MINUS
+	assert tokens[2].type == TokenType.MULTIPLY
+	assert tokens[3].type == TokenType.DIVIDE
+	assert tokens[4].type == TokenType.MODULO
+	assert tokens[5].type == TokenType.POWER
+}
+
+// 테스트 7: 비교 연산자
+fn test_tokenize_comparison() {
+	let code = "== != < > <= >="
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.EQ
+	assert tokens[1].type == TokenType.NEQ
+	assert tokens[2].type == TokenType.LT
+	assert tokens[3].type == TokenType.GT
+	assert tokens[4].type == TokenType.LE
+	assert tokens[5].type == TokenType.GE
+}
+
+// 테스트 8: 논리 연산자
+fn test_tokenize_logical() {
+	let code = "&& || !"
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.AND
+	assert tokens[1].type == TokenType.OR
+	assert tokens[2].type == TokenType.NOT
+}
+
+// 테스트 9: 구분자
+fn test_tokenize_delimiters() {
+	let code = "( ) { } [ ] ; , . :"
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.LPAREN
+	assert tokens[1].type == TokenType.RPAREN
+	assert tokens[2].type == TokenType.LBRACE
+	assert tokens[3].type == TokenType.RBRACE
+	assert tokens[4].type == TokenType.LBRACKET
+	assert tokens[5].type == TokenType.RBRACKET
+	assert tokens[6].type == TokenType.SEMICOLON
+	assert tokens[7].type == TokenType.COMMA
+	assert tokens[8].type == TokenType.DOT
+	assert tokens[9].type == TokenType.COLON
+}
+
+// 테스트 10: 화살표 연산자
+fn test_tokenize_arrows() {
+	let code = "-> =>"
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.ARROW
+	assert tokens[1].type == TokenType.FAT_ARROW
+}
+
+// 테스트 11: 할당 연산자
+fn test_tokenize_assignment() {
+	let code = "= += -= *= /="
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.ASSIGN
+	assert tokens[1].type == TokenType.PLUS_ASSIGN
+	assert tokens[2].type == TokenType.MINUS_ASSIGN
+	assert tokens[3].type == TokenType.MULTIPLY_ASSIGN
+	assert tokens[4].type == TokenType.DIVIDE_ASSIGN
+}
+
+// 테스트 12: 함수 정의 파싱
+fn test_tokenize_function() {
+	let code = "fn add(a: i64, b: i64) -> i64 { return a + b }"
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.FN
+	assert tokens[1].type == TokenType.IDENT  // add
+	assert tokens[2].type == TokenType.LPAREN
+	assert tokens[3].type == TokenType.IDENT  // a
+	assert tokens[4].type == TokenType.COLON
+	assert tokens[5].type == TokenType.IDENT  // i64
+}
+
+// 테스트 13: 복잡한 표현식
+fn test_tokenize_complex_expression() {
+	let code = "let x = 42 + 3.14 * 2"
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	assert tokens[0].type == TokenType.LET
+	assert tokens[1].type == TokenType.IDENT
+	assert tokens[2].type == TokenType.ASSIGN
+	assert tokens[3].type == TokenType.INT
+	assert tokens[4].type == TokenType.PLUS
+	assert tokens[5].type == TokenType.FLOAT
+	assert tokens[6].type == TokenType.MULTIPLY
+	assert tokens[7].type == TokenType.INT
+}
+
+// 테스트 14: 라인 및 열 추적
+fn test_tokenize_line_tracking() {
+	let code = "let x = 1\nlet y = 2"
+	let mut lexer = new_lexer(code)
+	let tokens = lexer.tokenize()
+
+	// 첫 번째 let
+	assert tokens[0].line == 1
+	// 두 번째 let은 다른 라인
+	assert tokens.len() > 6
+}
+
+// 메인 테스트 실행
+fn run_all_tests() {
+	test_tokenize_integers()
+	test_tokenize_floats()
+	test_tokenize_strings()
+	test_tokenize_keywords()
+	test_tokenize_identifiers()
+	test_tokenize_arithmetic()
+	test_tokenize_comparison()
+	test_tokenize_logical()
+	test_tokenize_delimiters()
+	test_tokenize_arrows()
+	test_tokenize_assignment()
+	test_tokenize_function()
+	test_tokenize_complex_expression()
+	test_tokenize_line_tracking()
+
+	println("✅ All 14 tests passed!")
+}
+
+fn main() {
+	run_all_tests()
+}

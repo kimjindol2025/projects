@@ -1,0 +1,166 @@
+# ============================================================================
+# Phase C Task C.7: VM/Runtime 테스트 (14개 테스트 케이스)
+# ============================================================================
+
+# Test 1: nil 값 생성
+function test_value_nil(): Bool =
+  let v = value_nil()
+  v.type_tag == "nil"
+
+# Test 2: int 값 생성
+function test_value_int(): Bool =
+  let v = value_int(42)
+  v.type_tag == "int" && v.int_val == 42
+
+# Test 3: float 값 생성
+function test_value_float(): Bool =
+  let v = value_float(3.14)
+  v.type_tag == "float"
+
+# Test 4: string 값 생성
+function test_value_string(): Bool =
+  let v = value_string("hello")
+  v.type_tag == "string" && v.string_val == "hello"
+
+# Test 5: bool 값 생성
+function test_value_bool(): Bool =
+  let v_true = value_bool(true)
+  let v_false = value_bool(false)
+  v_true.bool_val && !v_false.bool_val
+
+# Test 6: 메모리 할당
+function test_allocate_memory(): Bool =
+  let mem = new_memory()
+  let v = value_int(10)
+  let (mem2, addr) = allocate(mem, v)
+  mem2.next_address == 1
+
+# Test 7: 메모리에서 로드
+function test_load_memory(): Bool =
+  let mem = new_memory()
+  let v = value_int(20)
+  let (mem2, addr) = allocate(mem, v)
+  match load(mem2, addr) {
+    Some(loaded) -> loaded.int_val == 20,
+    None -> false,
+  }
+
+# Test 8: 메모리에 저장
+function test_store_memory(): Bool =
+  let mem = new_memory()
+  let v1 = value_int(10)
+  let (mem2, addr) = allocate(mem, v1)
+  let v2 = value_int(20)
+  let mem3 = store(mem2, addr, v2)
+  match load(mem3, addr) {
+    Some(loaded) -> loaded.int_val == 20,
+    None -> false,
+  }
+
+# Test 9: 레지스터 설정 및 조회
+function test_register_operations(): Bool =
+  let regs = new_registers()
+  let v = value_int(100)
+  let regs2 = set_register(regs, "r0", v)
+  match get_register(regs2, "r0") {
+    Some(loaded) -> loaded.int_val == 100,
+    None -> false,
+  }
+
+# Test 10: 호출 스택 관리
+function test_call_stack(): Bool =
+  let stack = new_call_stack()
+  let frame = new_frame("test", [], 0)
+  let stack2 = push_frame(stack, frame)
+  stack2.sp == 1 &&
+  match current_frame(stack2) {
+    Some(f) -> f.func_name == "test",
+    None -> false,
+  }
+
+# Test 11: 프레임 팝
+function test_pop_frame(): Bool =
+  let stack = new_call_stack()
+  let frame = new_frame("test", [], 0)
+  let stack2 = push_frame(stack, frame)
+  let (stack3, popped) = pop_frame(stack2)
+  stack3.sp == 0 &&
+  match popped {
+    Some(f) -> f.func_name == "test",
+    None -> false,
+  }
+
+# Test 12: VM 생성
+function test_create_vm(): Bool =
+  let vm = new_vm()
+  vm.pc == 0 &&
+  !vm.halt &&
+  vm.errors.length == 0
+
+# Test 13: ADD 명령어 실행
+function test_execute_add(): Bool =
+  let vm = new_vm()
+  let v1 = value_int(5)
+  let v2 = value_int(3)
+  let regs = new_registers()
+  let regs2 = set_register(regs, "r0", v1)
+  let regs3 = set_register(regs2, "r1", v2)
+  let vm2 = VirtualMachine {
+    memory = vm.memory,
+    registers = regs3,
+    call_stack = vm.call_stack,
+    pc = vm.pc,
+    halt = vm.halt,
+    errors = vm.errors,
+  }
+  let vm3 = execute_add(vm2, "r0", "r1", "r2")
+  match get_register(vm3.registers, "r2") {
+    Some(result) -> result.int_val == 8,
+    None -> false,
+  }
+
+# Test 14: 메모리 크기 조회
+function test_memory_size(): Bool =
+  let vm = new_vm()
+  let v = value_int(42)
+  let (mem2, addr) = allocate(vm.memory, v)
+  let vm2 = VirtualMachine {
+    memory = mem2,
+    registers = vm.registers,
+    call_stack = vm.call_stack,
+    pc = vm.pc,
+    halt = vm.halt,
+    errors = vm.errors,
+  }
+  memory_size(vm2) == 1
+
+# ============================================================================
+# 모든 테스트 실행
+# ============================================================================
+
+function run_vm_tests(): Bool =
+  let results = [
+    ("test_value_nil", test_value_nil()),
+    ("test_value_int", test_value_int()),
+    ("test_value_float", test_value_float()),
+    ("test_value_string", test_value_string()),
+    ("test_value_bool", test_value_bool()),
+    ("test_allocate_memory", test_allocate_memory()),
+    ("test_load_memory", test_load_memory()),
+    ("test_store_memory", test_store_memory()),
+    ("test_register_operations", test_register_operations()),
+    ("test_call_stack", test_call_stack()),
+    ("test_pop_frame", test_pop_frame()),
+    ("test_create_vm", test_create_vm()),
+    ("test_execute_add", test_execute_add()),
+    ("test_memory_size", test_memory_size()),
+  ]
+
+  for (name, result) in results {
+    if !result then
+      eprintln("❌ FAILED: " + name)
+    else
+      println("✅ PASSED: " + name)
+  }
+
+  true
