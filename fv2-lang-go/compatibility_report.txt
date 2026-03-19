@@ -1,0 +1,24 @@
+=== FV 2.0 Compatibility Test Report ===
+Date: Thu Mar 19 15:30:35 KST 2026
+
+✅ PASS - 01_basic_types.fv
+✅ PASS - 02_arithmetic.fv
+✅ PASS - 03_comparison.fv
+✅ PASS - 04_logical.fv
+✅ PASS - 05_arrays.fv
+✅ PASS - 06_for_loop.fv
+✅ PASS - 07_if_else.fv
+✅ PASS - 08_match.fv
+✅ PASS - 09_function_call.fv
+✅ PASS - 10_struct.fv
+✅ PASS - 11_constant.fv
+✅ PASS - 12_unary.fv
+✅ PASS - 13_assignment.fv
+✅ PASS - 14_return.fv
+✅ PASS - 15_nested_if.fv
+
+=== Summary ===
+Total: 15
+Passed: 15
+Failed: 0
+Compatibility Rate: 100%

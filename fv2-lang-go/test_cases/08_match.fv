@@ -1,0 +1,8 @@
+fn main() {
+    let x = 2
+    match x {
+        1 => { let y = 10; },
+        2 => { let y = 20; },
+        _ => { let y = 0; }
+    }
+}

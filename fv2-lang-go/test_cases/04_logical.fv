@@ -1,0 +1,5 @@
+fn main() {
+    let flag1 = true && false
+    let flag2 = true || false
+    let flag3 = !true
+}

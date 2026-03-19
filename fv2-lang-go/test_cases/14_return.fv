@@ -1,0 +1,7 @@
+fn getValue() i64 {
+    return 42
+}
+
+fn main() {
+    let result = getValue()
+}

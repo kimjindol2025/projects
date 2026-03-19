@@ -1,0 +1,7 @@
+fn main() {
+    let a = 10 + 5
+    let b = 20 - 3
+    let c = 4 * 5
+    let d = 100 / 2
+    let e = 17 % 5
+}
