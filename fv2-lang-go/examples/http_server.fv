@@ -1,0 +1,148 @@
+// HTTP Server 예제 - FV 2.0 with HTTP Library
+// 간단한 HTTP 웹 서버 구현
+
+// HTTP Request 구조체
+struct HttpRequest {
+    method: string
+    path: string
+    headers: string
+    body: string
+}
+
+// HTTP Response 구조체
+struct HttpResponse {
+    status_code: i64
+    status_text: string
+    headers: string
+    body: string
+}
+
+// 요청 핸들러 함수
+fn handle_request(req: HttpRequest) HttpResponse {
+    // 경로에 따른 응답 분기
+    if req.path == "/" {
+        // 홈페이지
+        let response = HttpResponse {
+            status_code: 200,
+            status_text: "OK",
+            headers: "Content-Type: text/html",
+            body: "<h1>Welcome to FV 2.0 Server!</h1>"
+        }
+        return response
+    } else if req.path == "/api/hello" {
+        // API 엔드포인트
+        let response = HttpResponse {
+            status_code: 200,
+            status_text: "OK",
+            headers: "Content-Type: application/json",
+            body: "{\"message\": \"Hello from FV 2.0!\"}"
+        }
+        return response
+    } else if req.path == "/api/echo" {
+        // Echo API - 요청 body 반환
+        let response = HttpResponse {
+            status_code: 200,
+            status_text: "OK",
+            headers: "Content-Type: text/plain",
+            body: req.body
+        }
+        return response
+    } else {
+        // 404 Not Found
+        let response = HttpResponse {
+            status_code: 404,
+            status_text: "Not Found",
+            headers: "Content-Type: text/html",
+            body: "<h1>404 - Page Not Found</h1>"
+        }
+        return response
+    }
+}
+
+// HTTP 서버 시작
+fn start_server(port: i64) {
+    let server_config = "Server started on port"
+
+    // 포트별로 다른 설정
+    if port == 8080 {
+        let config = "Development mode"
+    } else if port == 443 {
+        let config = "HTTPS mode"
+    } else {
+        let config = "Custom port"
+    }
+}
+
+// 라우팅 테이블 (배열 기반)
+struct Route {
+    path: string
+    method: string
+    handler: string
+}
+
+// 라우팅 등록
+fn register_routes() {
+    let routes = [
+        Route {
+            path: "/",
+            method: "GET",
+            handler: "handle_home"
+        },
+        Route {
+            path: "/api/hello",
+            method: "GET",
+            handler: "handle_hello"
+        },
+        Route {
+            path: "/api/users",
+            method: "GET",
+            handler: "handle_users"
+        }
+    ]
+}
+
+// 미들웨어: 요청 로깅
+fn log_request(method: string, path: string) {
+    let timestamp = "2026-03-19 12:34:56"
+    let log_entry = method
+}
+
+// 미들웨어: CORS 헤더 추가
+fn add_cors_headers(response: HttpResponse) HttpResponse {
+    let cors_response = HttpResponse {
+        status_code: response.status_code,
+        status_text: response.status_text,
+        headers: "Access-Control-Allow-Origin: *",
+        body: response.body
+    }
+    return cors_response
+}
+
+// 서버 메인 루프
+fn main() {
+    let server_port = 8080
+    let request_count = 0
+
+    // 서버 시작
+    start_server(server_port)
+
+    // 라우팅 등록
+    register_routes()
+
+    // 요청 처리 루프 (시뮬레이션)
+    for i in 0..3 {
+        // 요청 객체 생성
+        let request = HttpRequest {
+            method: "GET",
+            path: "/api/hello",
+            headers: "User-Agent: FV-Client/1.0",
+            body: ""
+        }
+
+        // 요청 처리
+        let response = handle_request(request)
+
+        // 응답 로깅
+        let status = response.status_code
+    }
+}
