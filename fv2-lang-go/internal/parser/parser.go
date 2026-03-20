@@ -46,28 +46,27 @@ func (p *Parser) Parse() (*ast.Program, error) {
 			if def != nil {
 				definitions = append(definitions, def)
 			}
+		} else if p.check(lexer.TknExtern) {
+			// Handle extern function declaration
+			def, err := p.parseExternDef()
+			if err != nil {
+				p.errors = append(p.errors, err.Error())
+				p.synchronize()
+				continue
+			}
+			if def != nil {
+				definitions = append(definitions, def)
+			}
 		} else if p.check(lexer.TknFn) {
-			// Check for extern fn
-			if p.peekAhead(1) != nil && p.peekAhead(1).Type == lexer.TknIdentifier && p.peekAhead(1).Text == "extern" {
-				def, err := p.parseExternDef()
-				if err != nil {
-					p.errors = append(p.errors, err.Error())
-					p.synchronize()
-					continue
-				}
-				if def != nil {
-					definitions = append(definitions, def)
-				}
-			} else {
-				def, err := p.parseFunctionDef()
-				if err != nil {
-					p.errors = append(p.errors, err.Error())
-					p.synchronize() // Error recovery: skip to next definition
-					continue
-				}
-				if def != nil {
-					definitions = append(definitions, def)
-				}
+			// Handle regular function definition
+			def, err := p.parseFunctionDef()
+			if err != nil {
+				p.errors = append(p.errors, err.Error())
+				p.synchronize() // Error recovery: skip to next definition
+				continue
+			}
+			if def != nil {
+				definitions = append(definitions, def)
 			}
 		} else if p.check(lexer.TknType) {
 			def, err := p.parseTypeDef()
@@ -1095,13 +1094,13 @@ func (p *Parser) parseImportStatement() (*ast.ImportStatement, error) {
 
 // parseExternDef parses an extern function declaration
 func (p *Parser) parseExternDef() (*ast.ExternDef, error) {
-	if !p.match(lexer.TknFn) {
+	if !p.match(lexer.TknExtern) {
 		return nil, nil
 	}
 
-	// Skip 'extern' keyword if present
-	if p.check(lexer.TknIdentifier) && p.current().Text == "extern" {
-		p.advance()
+	// Expect 'fn' keyword
+	if !p.match(lexer.TknFn) {
+		return nil, fmt.Errorf("expected 'fn' after 'extern' at %d:%d", p.current().Line, p.current().Column)
 	}
 
 	name := p.current().Text

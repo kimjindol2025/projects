@@ -38,6 +38,7 @@ func New(input string) (*Lexer, error) {
 
 	keywords := map[string]TokenType{
 		"fn":        TknFn,
+		"extern":    TknExtern,
 		"let":       TknLet,
 		"mut":       TknMut,
 		"const":     TknConst,

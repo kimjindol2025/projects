@@ -9,6 +9,7 @@ type TokenType int
 const (
 	// Keywords
 	TknFn TokenType = iota
+	TknExtern
 	TknLet
 	TknMut
 	TknConst

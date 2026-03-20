@@ -69,6 +69,8 @@ func (c *Checker) checkDefinition(def ast.Definition) {
 	switch d := def.(type) {
 	case *ast.FunctionDef:
 		c.checkFunctionDef(d)
+	case *ast.ExternDef:
+		c.checkExternDef(d)
 	case *ast.StructDef:
 		c.checkStructDef(d)
 	case *ast.TypeDef:
@@ -115,6 +117,26 @@ func (c *Checker) checkFunctionDef(fn *ast.FunctionDef) {
 	prevScope.Define(fn.Name, fnType, "function")
 
 	c.CurrentScope = prevScope
+}
+
+func (c *Checker) checkExternDef(ext *ast.ExternDef) {
+	// Register extern function in scope
+	paramTypes := []Type{}
+	for _, param := range ext.Parameters {
+		paramType := c.astTypeToCheckerType(param.Type)
+		paramTypes = append(paramTypes, paramType)
+	}
+
+	var returnType Type = &PrimitiveType{Name: "none"}
+	if ext.ReturnType != nil {
+		returnType = c.astTypeToCheckerType(ext.ReturnType)
+	}
+
+	fnType := &FunctionType{
+		ParamTypes: paramTypes,
+		ReturnType: returnType,
+	}
+	c.CurrentScope.Define(ext.Name, fnType, "extern_function")
 }
 
 func (c *Checker) checkStructDef(str *ast.StructDef) {

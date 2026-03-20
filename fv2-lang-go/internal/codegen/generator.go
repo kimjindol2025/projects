@@ -13,7 +13,8 @@ type Generator struct {
 	code          strings.Builder
 	indent        int
 	VarCounter    int
-	functionStack []string // 현재 함수 스택
+	functionStack []string              // 현재 함수 스택
+	varTypes      map[string]string     // Variable name → FV type (i64, f64, string, etc.)
 }
 
 // New creates a new code generator
@@ -21,6 +22,7 @@ func New() *Generator {
 	return &Generator{
 		VarCounter:    0,
 		functionStack: []string{},
+		varTypes:      make(map[string]string),
 	}
 }
 
@@ -241,12 +243,19 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 // generateLetStatement generates let binding
 func (g *Generator) generateLetStatement(let *ast.LetStatement) {
 	varType := ""
+	fvType := ""  // FV type name for tracking
+
 	if let.Type != nil {
 		varType = g.generateType(let.Type)
+		fvType = let.Type.Name
 	} else {
 		// Infer type from initial value
 		varType = g.inferTypeFromExpression(let.Init)
+		fvType = g.inferFVTypeFromExpression(let.Init)
 	}
+
+	// Store variable type for later reference (e.g., in println)
+	g.varTypes[let.Name] = fvType
 
 	initValue := g.generateExpression(let.Init)
 	g.writeLine(fmt.Sprintf("%s %s = %s;", varType, let.Name, initValue))
@@ -519,23 +528,22 @@ func (g *Generator) generateCallExpression(call *ast.CallExpression) string {
 // generatePrintln generates a type-aware println call
 func (g *Generator) generatePrintln(arg ast.Expression) string {
 	argStr := g.generateExpression(arg)
+	fvType := g.inferFVTypeOfExpression(arg)
 
-	// Detect type from AST expression
-	switch arg.(type) {
-	case *ast.IntegerLiteral:
+	// Format based on FV type
+	switch fvType {
+	case "i64":
 		return fmt.Sprintf(`printf("%%lld\n", %s)`, argStr)
-	case *ast.FloatLiteral:
+	case "f64":
 		return fmt.Sprintf(`printf("%%f\n", %s)`, argStr)
-	case *ast.StringLiteral:
+	case "string":
 		return fmt.Sprintf(`printf("%%s\n", %s)`, argStr)
-	case *ast.BoolLiteral:
+	case "bool":
 		return fmt.Sprintf(`printf("%%s\n", %s ? "true" : "false")`, argStr)
-	case *ast.Identifier:
-		// For identifiers, we don't know the type, so assume string
-		// In a full implementation, we'd use TypeChecker info
-		return fmt.Sprintf(`printf("%%s\n", %s)`, argStr)
+	case "none":
+		return `printf("none\n")`
 	default:
-		// Default to treating as i64
+		// Default to i64
 		return fmt.Sprintf(`printf("%%lld\n", %s)`, argStr)
 	}
 }
@@ -543,24 +551,37 @@ func (g *Generator) generatePrintln(arg ast.Expression) string {
 // generatePrint generates a type-aware print call
 func (g *Generator) generatePrint(arg ast.Expression) string {
 	argStr := g.generateExpression(arg)
+	fvType := g.inferFVTypeOfExpression(arg)
 
-	// Detect type from AST expression
-	switch arg.(type) {
-	case *ast.IntegerLiteral:
+	// Format based on FV type
+	switch fvType {
+	case "i64":
 		return fmt.Sprintf(`printf("%%lld", %s)`, argStr)
-	case *ast.FloatLiteral:
+	case "f64":
 		return fmt.Sprintf(`printf("%%f", %s)`, argStr)
-	case *ast.StringLiteral:
+	case "string":
 		return fmt.Sprintf(`printf("%%s", %s)`, argStr)
-	case *ast.BoolLiteral:
+	case "bool":
 		return fmt.Sprintf(`printf("%%s", %s ? "true" : "false")`, argStr)
-	case *ast.Identifier:
-		// For identifiers, we don't know the type, so assume string
-		return fmt.Sprintf(`printf("%%s", %s)`, argStr)
+	case "none":
+		return `printf("")`
 	default:
-		// Default to treating as i64
+		// Default to i64
 		return fmt.Sprintf(`printf("%%lld", %s)`, argStr)
 	}
+}
+
+// inferFVTypeOfExpression infers FV type of an expression, checking variable tracking
+func (g *Generator) inferFVTypeOfExpression(expr ast.Expression) string {
+	// First check if it's an identifier whose type we've tracked
+	if ident, ok := expr.(*ast.Identifier); ok {
+		if fvType, exists := g.varTypes[ident.Name]; exists {
+			return fvType
+		}
+	}
+
+	// Otherwise, infer from the expression itself
+	return g.inferFVTypeFromExpression(expr)
 }
 
 // generateArrayExpression generates array literal
@@ -645,6 +666,31 @@ func (g *Generator) inferTypeFromExpression(expr ast.Expression) string {
 	default:
 		// Default to long long for unknown types
 		return "long long"
+	}
+}
+
+// inferFVTypeFromExpression infers FV type from AST expression
+func (g *Generator) inferFVTypeFromExpression(expr ast.Expression) string {
+	switch e := expr.(type) {
+	case *ast.IntegerLiteral:
+		return "i64"
+	case *ast.FloatLiteral:
+		return "f64"
+	case *ast.StringLiteral:
+		return "string"
+	case *ast.BoolLiteral:
+		return "bool"
+	case *ast.NoneLiteral:
+		return "none"
+	case *ast.ArrayExpression:
+		if len(e.Elements) > 0 {
+			elemType := g.inferFVTypeFromExpression(e.Elements[0])
+			return fmt.Sprintf("[]%s", elemType)
+		}
+		return "[]unknown"
+	default:
+		// Default to i64 for unknown types
+		return "i64"
 	}
 }
 
