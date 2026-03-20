@@ -3,6 +3,7 @@ package codegen
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"fv2-lang/internal/ast"
@@ -10,19 +11,21 @@ import (
 
 // Generator generates C code from an AST
 type Generator struct {
-	code          strings.Builder
-	indent        int
-	VarCounter    int
-	functionStack []string              // 현재 함수 스택
-	varTypes      map[string]string     // Variable name → FV type (i64, f64, string, etc.)
+	code            strings.Builder
+	indent          int
+	VarCounter      int
+	functionStack   []string              // 현재 함수 스택
+	varTypes        map[string]string     // Variable name → FV type (i64, f64, string, etc.)
+	externFuncTypes map[string]string     // Extern function name → return type (i64, f64, etc.)
 }
 
 // New creates a new code generator
 func New() *Generator {
 	return &Generator{
-		VarCounter:    0,
-		functionStack: []string{},
-		varTypes:      make(map[string]string),
+		VarCounter:      0,
+		functionStack:   []string{},
+		varTypes:        make(map[string]string),
+		externFuncTypes: make(map[string]string),
 	}
 }
 
@@ -132,6 +135,11 @@ func (g *Generator) writeExternDeclaration(ext *ast.ExternDef) {
 	params := g.generateParameterList(ext.Parameters)
 	returnType := g.generateType(ext.ReturnType)
 	g.writeLine(fmt.Sprintf("extern %s %s(%s);", returnType, ext.Name, params))
+
+	// Store return type in externFuncTypes for later type inference
+	if ext.ReturnType != nil {
+		g.externFuncTypes[ext.Name] = ext.ReturnType.Name
+	}
 }
 
 // writeStructDefinition writes struct definition
@@ -446,7 +454,12 @@ func (g *Generator) generateExpression(expr ast.Expression) string {
 	case *ast.IntegerLiteral:
 		return fmt.Sprintf("%d", e.Value)
 	case *ast.FloatLiteral:
-		return fmt.Sprintf("%g", e.Value)
+		// Format float with decimal point always visible
+		s := strconv.FormatFloat(e.Value, 'f', -1, 64)
+		if !strings.Contains(s, ".") {
+			s += ".0"
+		}
+		return s
 	case *ast.StringLiteral:
 		return fmt.Sprintf("\"%s\"", escapeString(e.Value))
 	case *ast.BoolLiteral:
@@ -712,6 +725,22 @@ func (g *Generator) inferFVTypeFromExpression(expr ast.Expression) string {
 			return fmt.Sprintf("[]%s", elemType)
 		}
 		return "[]unknown"
+	case *ast.CallExpression:
+		// Check if it's an extern function call
+		if ident, ok := e.Function.(*ast.Identifier); ok {
+			if retType, exists := g.externFuncTypes[ident.Name]; exists {
+				return retType // Return the extern function's return type
+			}
+		}
+		return "i64" // Default for regular function calls
+	case *ast.BinaryExpression:
+		// If either operand is f64, result is f64
+		leftType := g.inferFVTypeFromExpression(e.Left)
+		rightType := g.inferFVTypeFromExpression(e.Right)
+		if leftType == "f64" || rightType == "f64" {
+			return "f64"
+		}
+		return "i64"
 	default:
 		// Default to i64 for unknown types
 		return "i64"
