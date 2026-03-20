@@ -436,7 +436,8 @@ function parse_postfix_loop(parser: Parser, expr: Expr): (Parser, Option[Expr]) 
         # 연쇄 멤버 접근을 위해 재귀
         parse_postfix_loop(parser3, access)
       else
-        (parser2, Some(expr))
+        # 에러: "." 이후에는 식별자가 필수
+        (parser2, Some(expr))  # parser2로 진행하되, expr은 그대로 반환
 
     _ -> (parser, Some(expr)),
   }

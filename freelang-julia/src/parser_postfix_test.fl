@@ -1,0 +1,177 @@
+# ============================================================================
+# Bug #3 검증: Parser Postfix 연산자 처리
+# (멤버 접근, 배열 인덱싱, 함수 호출 연쇄)
+# ============================================================================
+
+# Test 1: 멤버 접근 - 단일
+function test_member_access_single(): Bool =
+  let lex = new_lexer("obj.field")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 2: 멤버 접근 - 연쇄 (obj.field1.field2)
+function test_member_access_chained(): Bool =
+  let lex = new_lexer("obj.field1.field2")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 3: 멤버 접근 - 3단계
+function test_member_access_deep(): Bool =
+  let lex = new_lexer("obj.a.b.c")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 4: 배열 인덱싱 - 단일
+function test_array_indexing_single(): Bool =
+  let lex = new_lexer("arr[0]")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 5: 배열 인덱싱 - 연쇄
+function test_array_indexing_chained(): Bool =
+  let lex = new_lexer("matrix[0][1]")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 6: 함수 호출 - 단일
+function test_function_call_single(): Bool =
+  let lex = new_lexer("foo()")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 7: 함수 호출 - 인자 포함
+function test_function_call_with_args(): Bool =
+  let lex = new_lexer("foo(1, 2, 3)")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 8: 함수 호출 - 연쇄
+function test_function_call_chained(): Bool =
+  let lex = new_lexer("foo().bar()")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 9: 혼합 - 멤버 + 인덱싱
+function test_mixed_member_and_index(): Bool =
+  let lex = new_lexer("obj.field[0]")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 10: 혼합 - 멤버 + 함수 호출
+function test_mixed_member_and_call(): Bool =
+  let lex = new_lexer("obj.method()")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 11: 복합 - obj.field[0].method()
+function test_complex_postfix(): Bool =
+  let lex = new_lexer("obj.field[0].method()")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> true,
+    Err(_) -> false,
+  }
+
+# Test 12: 에러 케이스 - obj. (식별자 없음)
+function test_postfix_error_missing_identifier(): Bool =
+  let lex = new_lexer("obj.")
+  let tokens = tokenize(lex)
+  let parser = new_parser(tokens)
+  let (_, result) = parse_program(parser)
+  match result {
+    Ok(_) -> false,  # 에러여야 함
+    Err(_) -> true,
+  }
+
+# ============================================================================
+# 테스트 실행 및 결과 보고
+# ============================================================================
+
+function main(): Unit =
+  let tests = [
+    ("test_member_access_single", test_member_access_single()),
+    ("test_member_access_chained", test_member_access_chained()),
+    ("test_member_access_deep", test_member_access_deep()),
+    ("test_array_indexing_single", test_array_indexing_single()),
+    ("test_array_indexing_chained", test_array_indexing_chained()),
+    ("test_function_call_single", test_function_call_single()),
+    ("test_function_call_with_args", test_function_call_with_args()),
+    ("test_function_call_chained", test_function_call_chained()),
+    ("test_mixed_member_and_index", test_mixed_member_and_index()),
+    ("test_mixed_member_and_call", test_mixed_member_and_call()),
+    ("test_complex_postfix", test_complex_postfix()),
+    ("test_postfix_error_missing_identifier", test_postfix_error_missing_identifier()),
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Parser Postfix Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("Success Rate: " + (passed * 100 / (passed + failed)).to_string() + "%")
+  println("==========================================")
