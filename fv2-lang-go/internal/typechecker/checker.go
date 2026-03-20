@@ -23,6 +23,22 @@ func New() *Checker {
 	globalScope.Define("bool", &PrimitiveType{Name: "bool"}, "type")
 	globalScope.Define("none", &PrimitiveType{Name: "none"}, "type")
 
+	// Add built-in functions
+	// Note: println/print are variadic and accept any type
+	// For simplicity, we register them as accepting "any" and let codegen handle conversion
+	globalScope.Define("println", &BuiltinFunctionType{
+		Name: "println",
+		IsVariadic: true,
+	}, "function")
+	globalScope.Define("print", &BuiltinFunctionType{
+		Name: "print",
+		IsVariadic: true,
+	}, "function")
+	globalScope.Define("len", &FunctionType{
+		ParamTypes: []Type{&ArrayType{ElementType: &PrimitiveType{Name: "i64"}}},
+		ReturnType: &PrimitiveType{Name: "i64"},
+	}, "function")
+
 	return &Checker{
 		GlobalScope: globalScope,
 		CurrentScope: globalScope,
@@ -425,6 +441,19 @@ func (c *Checker) checkCallExpression(call *ast.CallExpression) Type {
 		}
 
 		return ft.ReturnType
+	}
+
+	// Handle built-in functions
+	if bt, ok := fnType.(*BuiltinFunctionType); ok {
+		// Built-in functions like println, print accept any arguments
+		if bt.IsVariadic {
+			// Just check that arguments are valid expressions
+			for _, arg := range call.Arguments {
+				c.checkExpression(arg)
+			}
+			return &PrimitiveType{Name: "none"}
+		}
+		return &PrimitiveType{Name: "none"}
 	}
 
 	c.addError(0, 0, "cannot call non-function")

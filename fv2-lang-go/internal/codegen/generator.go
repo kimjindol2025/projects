@@ -495,14 +495,15 @@ func (g *Generator) generateCallExpression(call *ast.CallExpression) string {
 			if len(args) == 0 {
 				return `printf("\n")`
 			}
-			// println(arg) → printf("%s\n", arg)
-			return fmt.Sprintf(`printf("%%s\n", %s)`, args[0])
+			// println can accept i64, f64, string, bool, etc.
+			// Try to detect the type from the argument expression
+			return g.generatePrintln(call.Arguments[0])
 		case "print":
 			if len(args) == 0 {
 				return `printf("")`
 			}
-			// print(arg) → printf("%s", arg)
-			return fmt.Sprintf(`printf("%%s", %s)`, args[0])
+			// print can accept i64, f64, string, bool, etc.
+			return g.generatePrint(call.Arguments[0])
 		case "len":
 			if len(args) == 1 {
 				// len(array) → simplified as array length check
@@ -513,6 +514,53 @@ func (g *Generator) generateCallExpression(call *ast.CallExpression) string {
 	}
 
 	return fmt.Sprintf("%s(%s)", fn, strings.Join(args, ", "))
+}
+
+// generatePrintln generates a type-aware println call
+func (g *Generator) generatePrintln(arg ast.Expression) string {
+	argStr := g.generateExpression(arg)
+
+	// Detect type from AST expression
+	switch arg.(type) {
+	case *ast.IntegerLiteral:
+		return fmt.Sprintf(`printf("%%lld\n", %s)`, argStr)
+	case *ast.FloatLiteral:
+		return fmt.Sprintf(`printf("%%f\n", %s)`, argStr)
+	case *ast.StringLiteral:
+		return fmt.Sprintf(`printf("%%s\n", %s)`, argStr)
+	case *ast.BoolLiteral:
+		return fmt.Sprintf(`printf("%%s\n", %s ? "true" : "false")`, argStr)
+	case *ast.Identifier:
+		// For identifiers, we don't know the type, so assume string
+		// In a full implementation, we'd use TypeChecker info
+		return fmt.Sprintf(`printf("%%s\n", %s)`, argStr)
+	default:
+		// Default to treating as i64
+		return fmt.Sprintf(`printf("%%lld\n", %s)`, argStr)
+	}
+}
+
+// generatePrint generates a type-aware print call
+func (g *Generator) generatePrint(arg ast.Expression) string {
+	argStr := g.generateExpression(arg)
+
+	// Detect type from AST expression
+	switch arg.(type) {
+	case *ast.IntegerLiteral:
+		return fmt.Sprintf(`printf("%%lld", %s)`, argStr)
+	case *ast.FloatLiteral:
+		return fmt.Sprintf(`printf("%%f", %s)`, argStr)
+	case *ast.StringLiteral:
+		return fmt.Sprintf(`printf("%%s", %s)`, argStr)
+	case *ast.BoolLiteral:
+		return fmt.Sprintf(`printf("%%s", %s ? "true" : "false")`, argStr)
+	case *ast.Identifier:
+		// For identifiers, we don't know the type, so assume string
+		return fmt.Sprintf(`printf("%%s", %s)`, argStr)
+	default:
+		// Default to treating as i64
+		return fmt.Sprintf(`printf("%%lld", %s)`, argStr)
+	}
 }
 
 // generateArrayExpression generates array literal

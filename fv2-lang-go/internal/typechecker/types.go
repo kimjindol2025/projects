@@ -68,6 +68,22 @@ func (f *FunctionType) Equal(other Type) bool {
 	return false
 }
 
+// BuiltinFunctionType represents a built-in function (variadic or special)
+type BuiltinFunctionType struct {
+	Name       string
+	IsVariadic bool
+}
+
+func (b *BuiltinFunctionType) TypeString() string {
+	return fmt.Sprintf("builtin(%s)", b.Name)
+}
+func (b *BuiltinFunctionType) Equal(other Type) bool {
+	if o, ok := other.(*BuiltinFunctionType); ok {
+		return b.Name == o.Name
+	}
+	return false
+}
+
 // OptionType represents Option[T]
 type OptionType struct {
 	InnerType Type
