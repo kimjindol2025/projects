@@ -199,9 +199,12 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 
 // generateLetStatement generates let binding
 func (g *Generator) generateLetStatement(let *ast.LetStatement) {
-	varType := "auto" // C11 auto-type inference
+	varType := ""
 	if let.Type != nil {
 		varType = g.generateType(let.Type)
+	} else {
+		// Infer type from initial value
+		varType = g.inferTypeFromExpression(let.Init)
 	}
 
 	initValue := g.generateExpression(let.Init)
@@ -248,14 +251,23 @@ func (g *Generator) generateIfStatement(ifStmt *ast.IfStatement) {
 // generateForStatement generates for loop
 func (g *Generator) generateForStatement(forStmt *ast.ForStatement) {
 	// for i in iterator -> convert to C for loop
-	// Use a simple counter-based loop for arrays
-	iterator := g.generateExpression(forStmt.Iterator)
+	// Handle array literals with known size vs. variables
+	var loopCondition string
 
-	g.writeLine(fmt.Sprintf("// for %s in %s", forStmt.Variable, iterator))
-	g.writeLine(fmt.Sprintf("for (int _i = 0; _i < sizeof(%s)/sizeof(%s[0]); _i++) {", iterator, iterator))
+	if arrExpr, ok := forStmt.Iterator.(*ast.ArrayExpression); ok {
+		// Array literal with known size at compile time
+		loopCondition = fmt.Sprintf("_i < %d", len(arrExpr.Elements))
+	} else {
+		// Iterator is a variable - length must be provided at runtime
+		iterator := g.generateExpression(forStmt.Iterator)
+		loopCondition = fmt.Sprintf("_i < sizeof(%s)/sizeof(*%s)", iterator, iterator)
+		g.writeLine(fmt.Sprintf("// for %s in %s (array length calculation)", forStmt.Variable, iterator))
+	}
+
+	g.writeLine(fmt.Sprintf("for (int _i = 0; %s; _i++) {", loopCondition))
 	g.indent++
 
-	// Declare loop variable
+	// Declare loop variable as array index
 	g.writeLine(fmt.Sprintf("int %s = _i;", forStmt.Variable))
 
 	// Loop body
@@ -303,13 +315,40 @@ func (g *Generator) generateExpressionStatement(expr *ast.ExpressionStatement) {
 // generateMatchStatement generates match statement (as if-else chain)
 func (g *Generator) generateMatchStatement(match *ast.MatchStatement) {
 	// Convert match to if-else chain
-	_ = g.generateExpression(match.Expression)
+	expr := g.generateExpression(match.Expression)
 
 	for i, arm := range match.Arms {
-		// Generate pattern matching condition
-		// Pattern is an interface, so we always use default condition
-		condition := "1" // default: always true (simplified implementation)
+		// Generate pattern matching condition based on pattern type
+		var condition string
 
+		if arm.Pattern == nil {
+			// No pattern, always true
+			condition = "1"
+		} else {
+			// Type assert pattern to get correct type
+			switch p := arm.Pattern.(type) {
+			case *ast.LiteralPattern:
+				// Literal pattern: compare with expression
+				if p.Value != nil {
+					patternValue := g.generateExpression(p.Value)
+					condition = fmt.Sprintf("%s == %s", expr, patternValue)
+				} else {
+					condition = "1"
+				}
+			case *ast.IdentifierPattern:
+				// Identifier pattern: variable binding
+				// For now, treat as wildcard (would bind in full impl)
+				condition = "1"
+			case *ast.WildcardPattern:
+				// Wildcard: always matches (default case)
+				condition = "1"
+			default:
+				// Unknown pattern, treat as wildcard
+				condition = "1"
+			}
+		}
+
+		// Generate if/else if branch
 		if i == 0 {
 			g.writeLine(fmt.Sprintf("if (%s) {", condition))
 		} else {
@@ -469,6 +508,31 @@ func (g *Generator) endsWithReturn(stmts []ast.Statement) bool {
 
 	_, ok := stmts[len(stmts)-1].(*ast.ReturnStatement)
 	return ok
+}
+
+// inferTypeFromExpression infers C type from AST expression
+func (g *Generator) inferTypeFromExpression(expr ast.Expression) string {
+	switch e := expr.(type) {
+	case *ast.IntegerLiteral:
+		return "long long"
+	case *ast.FloatLiteral:
+		return "double"
+	case *ast.StringLiteral:
+		return "char*"
+	case *ast.BoolLiteral:
+		return "bool"
+	case *ast.NoneLiteral:
+		return "void*"
+	case *ast.ArrayExpression:
+		if len(e.Elements) > 0 {
+			elemType := g.inferTypeFromExpression(e.Elements[0])
+			return fmt.Sprintf("%s*", elemType)
+		}
+		return "void*"
+	default:
+		// Default to long long for unknown types
+		return "long long"
+	}
 }
 
 // escapeString escapes special characters in strings

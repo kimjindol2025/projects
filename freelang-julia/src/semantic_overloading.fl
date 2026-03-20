@@ -1,0 +1,300 @@
+# ==========================================
+# Bug #5 수정: Semantic 오버로딩 지원
+# ==========================================
+
+# ==========================================
+# 확장된 Symbol 정의
+# ==========================================
+
+record SymbolWithOverload =
+  name: String
+  signature: String         # foo(Int), foo(String) 등
+  kind: String             # "function", "variable", etc.
+  param_types: Array[String]  # 함수의 파라미터 타입
+  return_type: String      # 함수의 반환 타입
+  is_overload: Bool        # 오버로드된 함수인지
+
+# ==========================================
+# 오버로딩 지원 심볼 테이블
+# ==========================================
+
+record OverloadSymbolTable =
+  symbols: Dictionary[String, Array[SymbolWithOverload]]  # key: "foo", value: [overloads]
+  size: Int
+
+function new_overload_symbol_table(): OverloadSymbolTable =
+  OverloadSymbolTable {
+    symbols: new_dict(),
+    size: 0
+  }
+
+# ==========================================
+# 시그니처 생성
+# ==========================================
+
+function generate_function_signature(name: String, param_types: Array[String]): String =
+  # "foo(Int)" or "foo(Int, String)"
+  let sig = name + "("
+
+  for i in 0:param_types.length() do
+    if i > 0 then
+      sig = sig + ", "
+    end
+    sig = sig + param_types[i]
+  end
+
+  sig = sig + ")"
+  sig
+
+# ==========================================
+# 오버로딩 심볼 정의
+# ==========================================
+
+function define_overload_symbol(
+  table: OverloadSymbolTable,
+  name: String,
+  param_types: Array[String],
+  return_type: String
+): Result[OverloadSymbolTable, String] =
+  let signature = generate_function_signature(name, param_types)
+
+  let symbol = SymbolWithOverload {
+    name: name,
+    signature: signature,
+    kind: "function",
+    param_types: param_types,
+    return_type: return_type,
+    is_overload: true
+  }
+
+  # 같은 시그니처로 정의되었는지 확인
+  match dict_get(table.symbols, name) {
+    Some(overloads) -> {
+      # 이미 같은 시그니처가 있는지 확인
+      for overload in overloads do
+        if overload.signature == signature then
+          return Err("Function '" + signature + "' already defined")
+        end
+      end
+
+      # 새로운 오버로드 추가
+      overloads.push(symbol)
+      Ok(table)
+    },
+    None -> {
+      # 첫 번째 정의
+      let overloads = Array[SymbolWithOverload]()
+      overloads.push(symbol)
+      dict_set(table.symbols, name, overloads)
+      Ok(table)
+    }
+  }
+
+# ==========================================
+# 오버로딩 심볼 조회
+# ==========================================
+
+function lookup_overload_symbol(
+  table: OverloadSymbolTable,
+  name: String,
+  param_types: Array[String]
+): Option[SymbolWithOverload] =
+  let signature = generate_function_signature(name, param_types)
+
+  match dict_get(table.symbols, name) {
+    Some(overloads) -> {
+      for overload in overloads do
+        if overload.signature == signature then
+          return Some(overload)
+        end
+      end
+      None
+    },
+    None -> None
+  }
+
+# ==========================================
+# 모든 오버로드 조회
+# ==========================================
+
+function lookup_all_overloads(
+  table: OverloadSymbolTable,
+  name: String
+): Option[Array[SymbolWithOverload]] =
+  dict_get(table.symbols, name)
+
+# ==========================================
+# 함수 호출 매칭
+# ==========================================
+
+function find_matching_overload(
+  table: OverloadSymbolTable,
+  name: String,
+  arg_types: Array[String]
+): Option[SymbolWithOverload] =
+  # 1. 정확한 일치 찾기
+  match lookup_overload_symbol(table, name, arg_types) {
+    Some(sym) -> Some(sym),
+    None -> {
+      # 2. 호환 가능한 것 찾기 (미래 개선)
+      match lookup_all_overloads(table, name) {
+        Some(overloads) -> {
+          if overloads.length() > 0 then
+            Some(overloads[0])  # 첫 번째 선택 (실제로는 더 정교한 로직 필요)
+          else
+            None
+          end
+        },
+        None -> None
+      }
+    }
+  }
+
+# ==========================================
+# 오버로드 정보 출력
+# ==========================================
+
+function print_overload_signature(sym: SymbolWithOverload): Void =
+  println("Function: " + sym.signature)
+  println("  Return Type: " + sym.return_type)
+  println("  Parameters: " + sym.param_types.length().to_string())
+
+# ==========================================
+# 테스트
+# ==========================================
+
+function test_overload_same_name_different_types(): Bool =
+  let table = new_overload_symbol_table()
+
+  # foo(Int)
+  match define_overload_symbol(table, "foo", ["Int"], "Int") {
+    Ok(t1) -> {
+      # foo(String)
+      match define_overload_symbol(t1, "foo", ["String"], "String") {
+        Ok(t2) -> {
+          # 두 개 모두 정의됨
+          match lookup_overload_symbol(t2, "foo", ["Int"]) {
+            Some(sym1) -> {
+              match lookup_overload_symbol(t2, "foo", ["String"]) {
+                Some(sym2) -> sym1.return_type == "Int" && sym2.return_type == "String",
+                None -> false
+              }
+            },
+            None -> false
+          }
+        },
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+function test_overload_duplicate_signature(): Bool =
+  let table = new_overload_symbol_table()
+
+  match define_overload_symbol(table, "foo", ["Int"], "Int") {
+    Ok(t1) -> {
+      # 같은 시그니처로 다시 정의
+      match define_overload_symbol(t1, "foo", ["Int"], "String") {
+        Ok(_) -> false,  # 에러 발생해야 함
+        Err(_) -> true   # 올바르게 에러
+      }
+    },
+    Err(_) -> false
+  }
+
+function test_overload_function_matching(): Bool =
+  let table = new_overload_symbol_table()
+
+  match define_overload_symbol(table, "println", ["Int"], "Void") {
+    Ok(t1) -> {
+      match define_overload_symbol(t1, "println", ["String"], "Void") {
+        Ok(t2) -> {
+          # println(42) 호출 → println(Int) 매칭
+          match find_matching_overload(t2, "println", ["Int"]) {
+            Some(sym) -> sym.signature == "println(Int)",
+            None -> false
+          }
+        },
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+function test_overload_multiple_parameters(): Bool =
+  let table = new_overload_symbol_table()
+
+  # add(Int, Int) → Int
+  match define_overload_symbol(table, "add", ["Int", "Int"], "Int") {
+    Ok(t1) -> {
+      # add(String, String) → String
+      match define_overload_symbol(t1, "add", ["String", "String"], "String") {
+        Ok(t2) -> {
+          match lookup_overload_symbol(t2, "add", ["Int", "Int"]) {
+            Some(sym) -> sym.return_type == "Int",
+            None -> false
+          }
+        },
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+function test_overload_lookup_all(): Bool =
+  let table = new_overload_symbol_table()
+
+  match define_overload_symbol(table, "foo", ["Int"], "Int") {
+    Ok(t1) -> {
+      match define_overload_symbol(t1, "foo", ["String"], "String") {
+        Ok(t2) -> {
+          match define_overload_symbol(t2, "foo", ["Float"], "Float") {
+            Ok(t3) -> {
+              match lookup_all_overloads(t3, "foo") {
+                Some(overloads) -> overloads.length() == 3,
+                None -> false
+              }
+            },
+            Err(_) -> false
+          }
+        },
+        Err(_) -> false
+      }
+    },
+    Err(_) -> false
+  }
+
+# ==========================================
+# 실행
+# ==========================================
+
+function main(): Unit =
+  let tests = [
+    ("test_overload_same_name_different_types", test_overload_same_name_different_types()),
+    ("test_overload_duplicate_signature", test_overload_duplicate_signature()),
+    ("test_overload_function_matching", test_overload_function_matching()),
+    ("test_overload_multiple_parameters", test_overload_multiple_parameters()),
+    ("test_overload_lookup_all", test_overload_lookup_all())
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Bug #5 (Semantic Overloading) Validation:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  println("==========================================")
+
