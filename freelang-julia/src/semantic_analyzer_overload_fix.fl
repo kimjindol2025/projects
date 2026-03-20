@@ -1,0 +1,230 @@
+# ============================================================================
+# Bug #5 수정: Semantic Analyzer 함수 오버로딩 지원
+# ============================================================================
+# 문제: Symbol 저장이 이름만으로 key를 만들어서 오버로딩 불가능
+# 해결: 함수 시그니처를 key로 사용
+# ============================================================================
+
+# ============================================================================
+# 개선된 Symbol 구조 (기존 Symbol 대체)
+# ============================================================================
+
+record SymbolOverload =
+  name: String,              # 심볼 이름
+  signature: String,         # 함수 시그니처 (예: "foo(Int,String)")
+  kind: String,              # 종류 (Variable, Function, Constant 등)
+  type_name: String,         # 타입 이름
+  param_types: [String],     # 파라미터 타입 (함수인 경우)
+  return_type: String,       # 반환 타입 (함수인 경우)
+  mutable: Bool,             # 가변성
+  defined_at: (Int, Int),    # 정의된 위치 (line, column)
+
+# ============================================================================
+# 함수 시그니처 생성
+# ============================================================================
+
+# 시그니처 생성 함수
+function create_signature(name: String, param_types: [String]): String =
+  let sig = name + "("
+  let param_str = ""
+
+  for i in 0:param_types.length do
+    if i > 0 then
+      param_str = param_str + ","
+    end
+    param_str = param_str + param_types[i]
+  end
+
+  sig + param_str + ")"
+
+# 예시:
+# "foo" + ["Int", "String"] → "foo(Int,String)"
+# "bar" + ["Int"] → "bar(Int)"
+# "baz" + [] → "baz()"
+
+# ============================================================================
+# 개선된 Symbol 정의 함수
+# ============================================================================
+
+# 변수/상수 심볼 생성
+function new_symbol_variable(name: String, type_name: String, mutable: Bool, line: Int, column: Int): SymbolOverload =
+  SymbolOverload {
+    name = name,
+    signature = name,  # 변수는 시그니처 = 이름
+    kind = KindVariable,
+    type_name = type_name,
+    param_types = [],
+    return_type = "",
+    mutable = mutable,
+    defined_at = (line, column),
+  }
+
+# 함수 심볼 생성
+function new_symbol_function(name: String, param_types: [String], return_type: String, line: Int, column: Int): SymbolOverload =
+  let sig = create_signature(name, param_types)
+  SymbolOverload {
+    name = name,
+    signature = sig,  # 함수는 시그니처 = "name(type1,type2,...)"
+    kind = KindFunction,
+    type_name = return_type,
+    param_types = param_types,
+    return_type = return_type,
+    mutable = false,
+    defined_at = (line, column),
+  }
+
+# ============================================================================
+# 개선된 Scope (시그니처 기반)
+# ============================================================================
+
+record ScopeOverload =
+  parent: Option[ScopeOverload],
+  name: String,                          # 스코프 이름
+  symbols: Dict[String, SymbolOverload], # 시그니처 → 심볼
+  depth: Int,
+
+# ============================================================================
+# 개선된 Symbol 정의 함수
+# ============================================================================
+
+function define_symbol_overload(scope: ScopeOverload, symbol: SymbolOverload): Result[ScopeOverload, String] =
+  # 시그니처를 key로 사용 (이름이 아니라)
+  let signature = symbol.signature
+
+  # 같은 시그니처는 거부
+  if lookup(scope.symbols, signature).is_some() then
+    Err("Symbol '" + signature + "' already defined in this scope")
+  else
+    Ok(ScopeOverload {
+      parent = scope.parent,
+      name = scope.name,
+      symbols = insert(scope.symbols, signature, symbol),  # ← 시그니처를 key로!
+      depth = scope.depth,
+    })
+
+# ============================================================================
+# 개선된 심볼 조회
+# ============================================================================
+
+# 정확한 시그니처로 조회
+function lookup_symbol_exact(scope: ScopeOverload, signature: String): Option[SymbolOverload] =
+  match lookup(scope.symbols, signature) {
+    Some(sym) -> Some(sym),
+    None ->
+      match scope.parent {
+        Some(parent) -> lookup_symbol_exact(parent, signature),
+        None -> None,
+      },
+  }
+
+# 이름으로 조회 (모든 오버로드 찾기)
+function lookup_symbol_by_name(scope: ScopeOverload, name: String): [SymbolOverload] =
+  let results = []
+
+  # 현재 스코프에서 이름이 일치하는 모든 심볼 찾기
+  for entry in scope.symbols do
+    if entry.name == name then
+      results.push(entry)
+    end
+  end
+
+  # 부모 스코프도 탐색
+  match scope.parent {
+    Some(parent) ->
+      let parent_results = lookup_symbol_by_name(parent, name)
+      results + parent_results,  # ← 배열 연결
+    None -> results,
+  }
+
+# ============================================================================
+# 함수 오버로로딩 해결 (다중 디스패치)
+# ============================================================================
+
+# 호출 시그니처에 맞는 함수 찾기
+function find_matching_function(scope: ScopeOverload, name: String, arg_types: [String]): Option[SymbolOverload] =
+  let candidates = lookup_symbol_by_name(scope, name)
+
+  # 정확한 매칭 찾기
+  let exact_match = None
+  for candidate in candidates do
+    if candidate.kind == KindFunction then
+      if candidate.param_types.length == arg_types.length then
+        # 파라미터 타입 비교
+        let matches = true
+        for i in 0:arg_types.length do
+          if candidate.param_types[i] != arg_types[i] then
+            matches = false
+            break
+          end
+        end
+        if matches then
+          exact_match = Some(candidate)
+          break
+        end
+      end
+    end
+  end
+
+  exact_match
+
+# ============================================================================
+# 예제: 오버로딩된 함수 정의
+# ============================================================================
+
+# function foo(x: Int): Int = x + 1
+# function foo(x: String): String = "hello " + x
+
+# 정의:
+# sym1 = new_symbol_function("foo", ["Int"], "Int", 1, 1)
+#   → signature = "foo(Int)"
+# sym2 = new_symbol_function("foo", ["String"], "String", 2, 1)
+#   → signature = "foo(String)"
+
+# 정의 시:
+# define_symbol_overload(scope, sym1)  ✅
+# define_symbol_overload(scope, sym2)  ✅ (다른 시그니처)
+
+# 호출:
+# foo(42)       → find_matching_function(scope, "foo", ["Int"]) → sym1 ✅
+# foo("world")  → find_matching_function(scope, "foo", ["String"]) → sym2 ✅
+
+# ============================================================================
+# 개선된 ScopeStack
+# ============================================================================
+
+record ScopeStackOverload =
+  scopes: [ScopeOverload],
+  type_registry: TypeRegistry,
+
+function new_scope_stack_overload(registry: TypeRegistry): ScopeStackOverload =
+  let global_scope = ScopeOverload {
+    parent = None,
+    name = "global",
+    symbols = dict([]),  # 빈 딕셔너리
+    depth = 0,
+  }
+  ScopeStackOverload {
+    scopes = [global_scope],
+    type_registry = registry,
+  }
+
+function define_in_scope_overload(stack: ScopeStackOverload, symbol: SymbolOverload): Result[ScopeStackOverload, String] =
+  let current = stack.scopes.last()
+  match define_symbol_overload(current, symbol) {
+    Ok(updated_scope) ->
+      let updated_scopes = stack.scopes.slice(0, stack.scopes.length - 1).push(updated_scope)
+      Ok(ScopeStackOverload {
+        scopes = updated_scopes,
+        type_registry = stack.type_registry,
+      }),
+    Err(e) -> Err(e),
+  }
+
+function lookup_in_stack_overload(stack: ScopeStackOverload, signature: String): Option[SymbolOverload] =
+  let current = stack.scopes.last()
+  lookup_symbol_exact(current, signature)
+
+function find_function_in_stack(stack: ScopeStackOverload, name: String, arg_types: [String]): Option[SymbolOverload] =
+  let current = stack.scopes.last()
+  find_matching_function(current, name, arg_types)
+
