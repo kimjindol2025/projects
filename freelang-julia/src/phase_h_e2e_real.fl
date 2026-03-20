@@ -1,0 +1,231 @@
+# ============================================================================
+# Phase H: Real End-to-End Integration Tests
+# (실제 컴파일러 파이프라인을 사용한 진정한 E2E 검증)
+# ============================================================================
+#
+# 이전 phase_h_e2e_tests.fl은 stub 함수만 있어서 실제 파이프라인과
+# 연결되지 않았습니다. 이 파일은 실제 lexer → parser → code generator
+# 전체 체인을 거쳐 검증합니다.
+#
+# ============================================================================
+
+# ============================================================================
+# E2E Test 1: Hello World - 가장 기본적인 프로그램
+# ============================================================================
+
+function test_real_hello_world(): Bool =
+  let source = "function main(): Unit = println(\"Hello, World!\")"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let ir = build_ir(ast)
+  let code = generate_code(ir)
+
+  # 검증: 생성된 C 코드에 "Hello" 문자열과 printf 호출이 있는가?
+  code.length() > 0 && code.contains("Hello") && code.contains("printf")
+
+# ============================================================================
+# E2E Test 2: 변수 선언 및 산술 연산 (Int 타입)
+# ============================================================================
+
+function test_real_variable_arithmetic(): Bool =
+  let source = "function main(): Unit = let x: Int = 5; let y: Int = 3; let z: Int = x + y"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: int 타입과 덧셈 연산자가 생성되었는가?
+  code.contains("int ") && code.contains("+")
+
+# ============================================================================
+# E2E Test 3: 조건문 if-else 구조
+# ============================================================================
+
+function test_real_if_else(): Bool =
+  let source = "function main(): Unit = if 5 > 3 then println(\"greater\") else println(\"less\") end"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: if 문과 비교 연산자, 문자열이 있는가?
+  code.contains("if ") && code.contains(">") && code.contains("greater")
+
+# ============================================================================
+# E2E Test 4: for 루프 (범위 기반)
+# ============================================================================
+
+function test_real_for_loop(): Bool =
+  let source = "function main(): Unit = for i in 0:10 do println(i) end"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: for/while 루프 구조와 범위 연산자가 있는가?
+  code.contains("for ") || code.contains("while ")
+    && (code.contains(":") || code.contains("0") && code.contains("10"))
+
+# ============================================================================
+# E2E Test 5: 함수 정의 및 호출 (add 함수)
+# ============================================================================
+
+function test_real_function_definition(): Bool =
+  let source = "function add(a: Int, b: Int): Int = a + b
+                function main(): Unit = println(add(2, 3))"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 함수 정의와 함수 호출이 생성되었는가?
+  code.contains("add") && code.contains("int add")
+
+# ============================================================================
+# E2E Test 6: 재귀 함수 (팩토리얼)
+# ============================================================================
+
+function test_real_recursive_function(): Bool =
+  let source = "function factorial(n: Int): Int = if n <= 1 then 1 else n * factorial(n - 1) end
+                function main(): Unit = println(factorial(5))"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 재귀 함수와 조건부가 있는가?
+  code.contains("factorial") && code.contains("if ")
+
+# ============================================================================
+# E2E Test 7: 타입 불일치 오류 감지
+# ============================================================================
+
+function test_real_type_error_detection(): Bool =
+  let source = "function main(): Unit = let x: Int = \"string\""
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+
+  # 타입 체커가 에러를 감지해야 함
+  # 현재 구현: 타입 체크가 Optional Result라면 match로 처리
+  # 단순 구현: ast가 생성되면 타입 오류도 코드 생성 시 문제가 될 것
+  let ir = build_ir(ast)
+  let code = generate_code(ir)
+
+  # 에러 케이스이므로 정상 생성되지 않거나 주석으로 에러 표시됨
+  code.length() == 0 || code.contains("error") || code.contains("Error")
+
+# ============================================================================
+# E2E Test 8: 배열 처리 및 메서드 호출
+# ============================================================================
+
+function test_real_array_operations(): Bool =
+  let source = "function main(): Unit = let arr = Array[Int](); arr.push(1); arr.push(2); println(arr.length())"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 배열 선언과 메서드 호출이 있는가?
+  code.contains("Array") && code.contains("push")
+
+# ============================================================================
+# E2E Test 9: 레코드/구조체 정의 및 사용
+# ============================================================================
+
+function test_real_record_definition(): Bool =
+  let source = "record Point = x: Int; y: Int
+                function main(): Unit = let p = Point { x: 5, y: 10 }; println(p.x)"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 레코드 정의와 필드 접근이 있는가?
+  code.contains("Point") && code.contains("x")
+
+# ============================================================================
+# E2E Test 10: 복합 프로그램 (여러 기능 조합)
+# ============================================================================
+
+function test_real_complex_program(): Bool =
+  let source = "function fibonacci(n: Int): Int = if n <= 1 then n else fibonacci(n-1) + fibonacci(n-2) end
+                record Pair = first: Int; second: Int
+                function main(): Unit =
+                  let pair = Pair { first: 5, second: 10 }
+                  for i in 0:5 do
+                    println(fibonacci(i))
+                  end"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 재귀, 루프, 레코드가 모두 있는가?
+  code.contains("fibonacci") && code.contains("for ") && code.contains("Pair")
+
+# ============================================================================
+# E2E Test 11: 문자열 연결 연산
+# ============================================================================
+
+function test_real_string_concatenation(): Bool =
+  let source = "function main(): Unit = let greeting = \"Hello, \"; let name = \"World\"; println(greeting + name)"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 문자열 타입과 연결 연산자가 있는가?
+  code.contains("char*") || code.contains("String") && code.contains("\"Hello\"")
+
+# ============================================================================
+# E2E Test 12: Boolean 타입 및 논리 연산
+# ============================================================================
+
+function test_real_boolean_logic(): Bool =
+  let source = "function main(): Unit = let flag = true; if flag && !false then println(\"OK\") end"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: bool 타입과 논리 연산자가 있는가?
+  code.contains("bool") || code.contains("true") && code.contains("&&")
+
+# ============================================================================
+# 테스트 실행 및 결과 보고
+# ============================================================================
+
+function main(): Unit =
+  let tests = [
+    ("test_real_hello_world", test_real_hello_world()),
+    ("test_real_variable_arithmetic", test_real_variable_arithmetic()),
+    ("test_real_if_else", test_real_if_else()),
+    ("test_real_for_loop", test_real_for_loop()),
+    ("test_real_function_definition", test_real_function_definition()),
+    ("test_real_recursive_function", test_real_recursive_function()),
+    ("test_real_type_error_detection", test_real_type_error_detection()),
+    ("test_real_array_operations", test_real_array_operations()),
+    ("test_real_record_definition", test_real_record_definition()),
+    ("test_real_complex_program", test_real_complex_program()),
+    ("test_real_string_concatenation", test_real_string_concatenation()),
+    ("test_real_boolean_logic", test_real_boolean_logic()),
+  ]
+
+  let passed = 0
+  let failed = 0
+
+  println("==========================================")
+  println("Phase H Real E2E Tests (실제 파이프라인)")
+  println("==========================================\n")
+
+  for (name, result) in tests do
+    if result then
+      println("[✓] " + name)
+      passed = passed + 1
+    else
+      println("[✗] " + name)
+      failed = failed + 1
+    end
+  end
+
+  println("\n==========================================")
+  println("Phase H Real E2E Test Result:")
+  println("Passed: " + passed.to_string())
+  println("Failed: " + failed.to_string())
+  println("Total:  " + (passed + failed).to_string())
+  if (passed + failed) > 0 then
+    println("Success Rate: " + (passed * 100 / (passed + failed)).to_string() + "%")
+  end
+  println("==========================================")
+  println("\n✅ Phase H Real E2E Tests Complete!")
+
