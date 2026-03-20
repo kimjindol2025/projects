@@ -1,0 +1,136 @@
+# ============================================================================
+# Bug #4 수정: Type System 복합 타입 호환성 검사 추가
+# (ArrayType, FunctionType, TupleType, UnionType)
+# ============================================================================
+
+# 기존 코드 (줄 109-125)에서 복합 타입 정의는 있음:
+# record ArrayType { element_type: BasicType, dimensions: Int }
+# record FunctionType { param_types: [BasicType], return_type: BasicType }
+# record TupleType { element_types: [BasicType] }
+# record UnionType { types: [BasicType] }
+
+# 추가할 함수들:
+
+# ============================================================================
+# Part: 복합 타입 호환성 검사
+# ============================================================================
+
+# ArrayType 호환성 검사
+function is_array_type_compatible(arr1: ArrayType, arr2: ArrayType): Bool =
+  # 차원이 같고, 요소 타입이 호환되어야 함
+  if arr1.dimensions != arr2.dimensions then
+    false
+  else
+    is_subtype_of(arr1.element_type, arr2.element_type)
+
+# FunctionType 호환성 검사 (contravariance 규칙)
+function is_function_type_compatible(func1: FunctionType, func2: FunctionType): Bool =
+  # 반환 타입: covariant (하위 타입 가능)
+  # 파라미터: contravariant (상위 타입 가능)
+
+  # 1. 파라미터 개수 확인
+  if func1.param_types.length != func2.param_types.length then
+    return false
+  end
+
+  # 2. 반환 타입 호환성 (covariant)
+  if not is_subtype_of(func1.return_type, func2.return_type) then
+    return false
+  end
+
+  # 3. 파라미터 호환성 (contravariant)
+  let all_params_compatible = true
+  for i in 0:func1.param_types.length do
+    # func2의 파라미터가 func1의 상위 타입이어야 함 (contravariance)
+    if not is_subtype_of(func2.param_types[i], func1.param_types[i]) then
+      all_params_compatible = false
+      break
+    end
+  end
+
+  all_params_compatible
+
+# TupleType 호환성 검사
+function is_tuple_type_compatible(tuple1: TupleType, tuple2: TupleType): Bool =
+  # 요소 개수가 같고, 각 요소 타입이 호환되어야 함
+  if tuple1.element_types.length != tuple2.element_types.length then
+    return false
+  end
+
+  let all_elements_compatible = true
+  for i in 0:tuple1.element_types.length do
+    if not is_subtype_of(tuple1.element_types[i], tuple2.element_types[i]) then
+      all_elements_compatible = false
+      break
+    end
+  end
+
+  all_elements_compatible
+
+# UnionType 호환성 검사
+function is_union_type_compatible(union1: UnionType, union2: UnionType): Bool =
+  # union1의 모든 타입이 union2에 포함되어야 함
+  let all_types_in_union2 = true
+  for typ1 in union1.types do
+    let found = false
+    for typ2 in union2.types do
+      if is_subtype_of(typ1, typ2) then
+        found = true
+        break
+      end
+    end
+    if not found then
+      all_types_in_union2 = false
+      break
+    end
+  end
+
+  all_types_in_union2
+
+# ============================================================================
+# 통합 호환성 검사 (기존 is_subtype_of 확장)
+# ============================================================================
+
+# 참고: 이 함수들은 기존 is_subtype_of()를 확장하기 위해 사용
+# 기존 BasicType 버전과 함께 사용:
+
+# function is_subtype_of_complex(t1: Any, t2: Any): Bool =
+#   match (t1, t2) {
+#     (ArrayType(a1), ArrayType(a2)) -> is_array_type_compatible(a1, a2),
+#     (FunctionType(f1), FunctionType(f2)) -> is_function_type_compatible(f1, f2),
+#     (TupleType(tu1), TupleType(tu2)) -> is_tuple_type_compatible(tu1, tu2),
+#     (UnionType(u1), UnionType(u2)) -> is_union_type_compatible(u1, u2),
+#     (BasicType(b1), BasicType(b2)) -> is_subtype_of(b1, b2),
+#     _ -> false,
+#   }
+
+# ============================================================================
+# 타입 검사 유틸리티
+# ============================================================================
+
+# Array[T] 생성 헬퍼
+function make_array_type(element_type: BasicType, dimensions: Int): ArrayType =
+  ArrayType {
+    element_type = element_type,
+    dimensions = dimensions,
+  }
+
+# Function 타입 생성 헬퍼
+function make_function_type(param_types: [BasicType], return_type: BasicType): FunctionType =
+  FunctionType {
+    param_types = param_types,
+    return_type = return_type,
+  }
+
+# Tuple 타입 생성 헬퍼
+function make_tuple_type(element_types: [BasicType]): TupleType =
+  TupleType {
+    element_types = element_types,
+  }
+
+# Union 타입 생성 헬퍼
+function make_union_type(types: [BasicType]): UnionType =
+  UnionType {
+    types = types,
+  }
+
