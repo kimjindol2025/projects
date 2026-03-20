@@ -33,10 +33,12 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	g.writeLine("#include <stdbool.h>")
 	g.writeLine("")
 
-	// Forward declarations for functions
+	// Forward declarations for functions (except main)
 	for _, def := range program.Definitions {
 		if fn, ok := def.(*ast.FunctionDef); ok {
-			g.writeFunctionDeclaration(fn)
+			if fn.Name != "main" {
+				g.writeFunctionDeclaration(fn)
+			}
 		}
 	}
 	g.writeLine("")
@@ -53,19 +55,32 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	g.writeLine("")
 
 	// Function implementations
+	var mainFunc *ast.FunctionDef
 	for _, def := range program.Definitions {
 		if fn, ok := def.(*ast.FunctionDef); ok {
-			g.writeFunctionDefinition(fn)
-			g.writeLine("")
+			if fn.Name == "main" {
+				mainFunc = fn
+			} else {
+				g.writeFunctionDefinition(fn)
+				g.writeLine("")
+			}
 		}
 	}
 
-	// Main function
+	// Main function (either from definition or generated)
 	g.writeLine("int main() {")
 	g.indent++
 
-	for _, stmt := range program.MainBody {
-		g.generateStatement(stmt)
+	if mainFunc != nil {
+		// Use main function body from definition
+		for _, stmt := range mainFunc.Body {
+			g.generateStatement(stmt)
+		}
+	} else {
+		// Use main body statements
+		for _, stmt := range program.MainBody {
+			g.generateStatement(stmt)
+		}
 	}
 
 	g.writeLine("return 0;")
