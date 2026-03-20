@@ -1082,11 +1082,7 @@ func (p *Parser) parseImportStatement() (*ast.ImportStatement, error) {
 	}
 
 	module := p.previous().Text
-	// Remove quotes from string literal
-	if len(module) >= 2 {
-		module = module[1 : len(module)-1]
-	}
-
+	// Lexer already removes quotes, so use Text directly
 	return &ast.ImportStatement{
 		Module: module,
 	}, nil

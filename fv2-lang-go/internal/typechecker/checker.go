@@ -34,9 +34,37 @@ func New() *Checker {
 		Name: "print",
 		IsVariadic: true,
 	}, "function")
-	globalScope.Define("len", &FunctionType{
-		ParamTypes: []Type{&ArrayType{ElementType: &PrimitiveType{Name: "i64"}}},
-		ReturnType: &PrimitiveType{Name: "i64"},
+	globalScope.Define("len", &BuiltinFunctionType{
+		Name: "len",
+		IsVariadic: false,
+	}, "function")
+
+	// Math stdlib functions
+	globalScope.Define("abs", &BuiltinFunctionType{
+		Name: "abs",
+		IsVariadic: false,
+	}, "function")
+	globalScope.Define("min", &BuiltinFunctionType{
+		Name: "min",
+		IsVariadic: false,
+	}, "function")
+	globalScope.Define("max", &BuiltinFunctionType{
+		Name: "max",
+		IsVariadic: false,
+	}, "function")
+
+	// Conversion functions
+	globalScope.Define("to_string", &BuiltinFunctionType{
+		Name: "to_string",
+		IsVariadic: false,
+	}, "function")
+	globalScope.Define("to_int", &BuiltinFunctionType{
+		Name: "to_int",
+		IsVariadic: false,
+	}, "function")
+	globalScope.Define("to_float", &BuiltinFunctionType{
+		Name: "to_float",
+		IsVariadic: false,
 	}, "function")
 
 	return &Checker{

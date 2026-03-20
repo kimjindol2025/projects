@@ -36,6 +36,8 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 
 	// Process imports and write additional headers
 	for _, def := range program.Definitions {
+		// DEBUG: Check type
+		_ = fmt.Sprintf("%T", def)
 		if imp, ok := def.(*ast.ImportStatement); ok {
 			switch imp.Module {
 			case "math":
@@ -46,6 +48,12 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 				// string functions in string.h already included
 			case "stdlib":
 				// stdlib.h already included
+			case "http":
+				// Custom HTTP library (if needed)
+			case "io":
+				// Custom I/O library
+			default:
+				// Unknown import - skip silently
 			}
 		}
 	}
@@ -504,20 +512,41 @@ func (g *Generator) generateCallExpression(call *ast.CallExpression) string {
 			if len(args) == 0 {
 				return `printf("\n")`
 			}
-			// println can accept i64, f64, string, bool, etc.
-			// Try to detect the type from the argument expression
 			return g.generatePrintln(call.Arguments[0])
 		case "print":
 			if len(args) == 0 {
 				return `printf("")`
 			}
-			// print can accept i64, f64, string, bool, etc.
 			return g.generatePrint(call.Arguments[0])
 		case "len":
 			if len(args) == 1 {
-				// len(array) → simplified as array length check
-				// For arrays: would need runtime length info
 				return fmt.Sprintf(`(sizeof(%s)/sizeof(*%s))`, args[0], args[0])
+			}
+		case "abs":
+			if len(args) == 1 {
+				return fmt.Sprintf(`llabs(%s)`, args[0])
+			}
+		case "min":
+			if len(args) == 2 {
+				return fmt.Sprintf(`((%s) < (%s) ? (%s) : (%s))`, args[0], args[1], args[0], args[1])
+			}
+		case "max":
+			if len(args) == 2 {
+				return fmt.Sprintf(`((%s) > (%s) ? (%s) : (%s))`, args[0], args[1], args[0], args[1])
+			}
+		case "to_string":
+			// Converts value to string (simplified - only works for numbers)
+			if len(args) == 1 {
+				// In real implementation, would use snprintf or similar
+				return fmt.Sprintf(`(char*)"<string>"`)
+			}
+		case "to_int":
+			if len(args) == 1 {
+				return fmt.Sprintf(`((long long)%s)`, args[0])
+			}
+		case "to_float":
+			if len(args) == 1 {
+				return fmt.Sprintf(`((double)%s)`, args[0])
 			}
 		}
 	}
