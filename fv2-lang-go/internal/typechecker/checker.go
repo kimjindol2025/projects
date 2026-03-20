@@ -53,18 +53,14 @@ func New() *Checker {
 		IsVariadic: false,
 	}, "function")
 
-	// Conversion functions
-	globalScope.Define("to_string", &BuiltinFunctionType{
-		Name: "to_string",
-		IsVariadic: false,
-	}, "function")
+	// Conversion functions (cast operations)
 	globalScope.Define("to_int", &BuiltinFunctionType{
 		Name: "to_int",
-		IsVariadic: false,
+		IsVariadic: true,
 	}, "function")
 	globalScope.Define("to_float", &BuiltinFunctionType{
 		Name: "to_float",
-		IsVariadic: false,
+		IsVariadic: true,
 	}, "function")
 
 	return &Checker{

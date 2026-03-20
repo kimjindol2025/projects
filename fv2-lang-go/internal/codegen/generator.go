@@ -33,6 +33,7 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	g.writeLine("#include <stdlib.h>")
 	g.writeLine("#include <string.h>")
 	g.writeLine("#include <stdbool.h>")
+	g.writeLine("#include <ctype.h>")
 
 	// Process imports and write additional headers
 	for _, def := range program.Definitions {
@@ -533,12 +534,6 @@ func (g *Generator) generateCallExpression(call *ast.CallExpression) string {
 		case "max":
 			if len(args) == 2 {
 				return fmt.Sprintf(`((%s) > (%s) ? (%s) : (%s))`, args[0], args[1], args[0], args[1])
-			}
-		case "to_string":
-			// Converts value to string (simplified - only works for numbers)
-			if len(args) == 1 {
-				// In real implementation, would use snprintf or similar
-				return fmt.Sprintf(`(char*)"<string>"`)
 			}
 		case "to_int":
 			if len(args) == 1 {
