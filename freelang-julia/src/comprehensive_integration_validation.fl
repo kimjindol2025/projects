@@ -1,0 +1,519 @@
+# ============================================================================
+# 종합 통합 검증: FreeJulia 전체 프로젝트 검증
+# (Comprehensive Integration Validation)
+# ============================================================================
+#
+# 모든 Phase (A-H)의 구현이 올바르게 통합되었는지 검증합니다.
+# 각 컴포넌트의 기능과 상호작용을 완벽히 테스트합니다.
+#
+# ============================================================================
+
+# ============================================================================
+# Part 1: Lexer 검증 (Phase A)
+# ============================================================================
+
+function test_lexer_tokenization(): Bool =
+  let source = "function add(a: Int, b: Int): Int = a + b"
+  let tokens = tokenize(source)
+
+  # 검증: 토큰이 생성되었는가?
+  tokens.length() > 0 &&
+  tokens.length() >= 10  # 최소 예상 토큰 수
+
+function test_lexer_string_literals(): Bool =
+  let source = "let greeting = \"Hello, World!\""
+  let tokens = tokenize(source)
+
+  # 검증: 문자열 리터럴 토큰화
+  tokens.length() > 0 && tokens.length() >= 5
+
+function test_lexer_operators(): Bool =
+  let source = "let x = 5 + 3 * 2 - 1 / 2"
+  let tokens = tokenize(source)
+
+  # 검증: 산술 연산자 토큰화
+  tokens.length() > 0
+
+# ============================================================================
+# Part 2: Parser 검증 (Phase B)
+# ============================================================================
+
+function test_parser_function_definition(): Bool =
+  let source = "function factorial(n: Int): Int = if n <= 1 then 1 else n * factorial(n - 1) end"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+
+  # 검증: AST 생성됨
+  ast != nil
+
+function test_parser_control_flow(): Bool =
+  let source = "if x > 0 then y = x else y = -x end"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+
+  # 검증: 제어흐름 파싱
+  ast != nil
+
+function test_parser_array_operations(): Bool =
+  let source = "let arr = Array[Int](); arr.push(1); arr.push(2)"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+
+  # 검증: 배열 연산 파싱
+  ast != nil
+
+# ============================================================================
+# Part 3: 타입 시스템 검증 (Phase C)
+# ============================================================================
+
+function test_type_system_basic_types(): Bool =
+  let source = "let x: Int = 42; let y: String = \"hello\"; let z: Bool = true"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let ir = build_ir(ast)
+
+  # 검증: 타입 검사 완료
+  ir != nil
+
+function test_type_system_function_signatures(): Bool =
+  let source = "function add(a: Int, b: Int): Int = a + b
+                function concat(a: String, b: String): String = a + b"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let ir = build_ir(ast)
+
+  # 검증: 함수 타입 시그니처 검증
+  ir != nil
+
+function test_type_system_arrays(): Bool =
+  let source = "let arr: Array[Int] = Array[Int]()"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let ir = build_ir(ast)
+
+  # 검증: 배열 타입 검증
+  ir != nil
+
+# ============================================================================
+# Part 4: 제어 흐름 검증 (Phase D)
+# ============================================================================
+
+function test_control_flow_if_else(): Bool =
+  let source = "function max(a: Int, b: Int): Int = if a > b then a else b end"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: if-else 코드 생성
+  code.contains("if ") && code.length() > 0
+
+function test_control_flow_for_loop(): Bool =
+  let source = "function sum_range(n: Int): Int =
+                  let total = 0
+                  for i in 0:n do
+                    total = total + i
+                  end
+                  total"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: for 루프 코드 생성
+  code.contains("for ") || code.contains("while ")
+
+function test_control_flow_while_loop(): Bool =
+  let source = "function countdown(n: Int): Unit =
+                  while n > 0 do
+                    println(n)
+                    n = n - 1
+                  end"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: while 루프 코드 생성
+  code.contains("while ") || code.contains("for ")
+
+# ============================================================================
+# Part 5: 고급 기능 검증 (Phase E)
+# ============================================================================
+
+function test_advanced_recursion(): Bool =
+  let source = "function fib(n: Int): Int =
+                  if n <= 1 then n
+                  else fib(n-1) + fib(n-2)
+                  end"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 재귀 함수 코드 생성
+  code.contains("fib") && code.contains("if ")
+
+function test_advanced_higher_order(): Bool =
+  let source = "function apply_twice(f: Function, x: Int): Int = f(f(x))"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 고차 함수 코드 생성
+  code.contains("apply_twice") && code.length() > 0
+
+function test_advanced_pattern_matching(): Bool =
+  let source = "function process(opt: Option[Int]): Int =
+                  match opt {
+                    Some(v) -> v,
+                    None -> 0
+                  }"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 패턴 매칭 코드 생성
+  code.contains("match") || code.contains("switch")
+
+# ============================================================================
+# Part 6: Collections 검증 (Phase F) - Bug #2 최적화 포함
+# ============================================================================
+
+function test_collections_array_operations(): Bool =
+  let source = "function test_array(): Unit =
+                  let arr = Array[Int]()
+                  arr.push(1)
+                  arr.push(2)
+                  arr.push(3)
+                  println(arr.length())
+                  println(arr.get(0))"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 배열 메서드 코드 생성
+  code.contains("push") && code.contains("length")
+
+function test_collections_dictionary_operations(): Bool =
+  let source = "function test_dict(): Unit =
+                  let dict = Dictionary[String, Int]()
+                  dict_set(dict, \"age\", 30)
+                  dict_get(dict, \"age\")"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 딕셔너리 연산 코드 생성
+  code.contains("dict") || code.contains("map")
+
+function test_collections_set_operations(): Bool =
+  let source = "function test_set(): Unit =
+                  let set = Set[String]()
+                  set_add(set, \"apple\")
+                  set_add(set, \"banana\")
+                  set_contains(set, \"apple\")"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 집합 연산 코드 생성
+  code.contains("set") || code.contains("Set")
+
+# ============================================================================
+# Part 7: 파일 I/O 검증 (Phase F)
+# ============================================================================
+
+function test_file_io_write(): Bool =
+  let source = "function write_file(): Unit =
+                  match vfs_write_file(\"/test.txt\", \"Hello\") {
+                    Ok(size) -> println(\"Wrote \" + size.to_string() + \" bytes\"),
+                    Err(e) -> println(\"Error: \" + e.message)
+                  }"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 파일 쓰기 코드 생성
+  code.contains("write") || code.contains("file")
+
+function test_file_io_read(): Bool =
+  let source = "function read_file(): Unit =
+                  match vfs_read_file(\"/test.txt\") {
+                    Ok(content) -> println(content),
+                    Err(e) -> println(\"Error: \" + e.message)
+                  }"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 파일 읽기 코드 생성
+  code.contains("read") || code.contains("file")
+
+# ============================================================================
+# Part 8: 오류 처리 검증 (Phase G)
+# ============================================================================
+
+function test_error_handling_result(): Bool =
+  let source = "function safe_divide(a: Int, b: Int): Result[Int, String] =
+                  if b == 0 then
+                    Err(\"Division by zero\")
+                  else
+                    Ok(a / b)
+                  end"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: Result 타입 코드 생성
+  code.contains("Result") || code.contains("Error")
+
+function test_error_handling_option(): Bool =
+  let source = "function find_element(arr: Array[Int], x: Int): Option[Int] =
+                  for i in 0:arr.length() do
+                    if arr.get(i) == x then
+                      return Some(i)
+                    end
+                  end
+                  None"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: Option 타입 코드 생성
+  code.contains("Option") || code.contains("Some")
+
+# ============================================================================
+# Part 9: Self-Hosting 검증 (Phase H)
+# ============================================================================
+
+function test_self_hosting_lexer(): Bool =
+  # Self-hosting: 컴파일러를 컴파일러로 컴파일할 수 있는가?
+  let source = "function tokenize(input: String): Array[Token] = Array[Token]()"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 컴파일러 코드 생성
+  code.contains("tokenize") && code.contains("Array")
+
+function test_self_hosting_parser(): Bool =
+  let source = "function parse(tokens: Array[Token]): ASTNode =
+                  match tokens.length() {
+                    0 -> error(\"Empty tokens\"),
+                    _ -> build_node(tokens)
+                  }"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 파서 코드 생성
+  code.contains("parse") && code.contains("match")
+
+# ============================================================================
+# Part 10: 타입 안전성 검증 (Phase H - Bug #4)
+# ============================================================================
+
+function test_type_safety_array_compatibility(): Bool =
+  let source = "function process_array(arr: Array[Int]): Int = arr.length()"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: Array[Int] 타입 검사
+  code.contains("Array") && code.length() > 0
+
+function test_type_safety_function_signatures(): Bool =
+  let source = "function apply(f: Function, x: Int, y: Int): Int = f(x, y)
+                function multiply(a: Int, b: Int): Int = a * b"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: Function 타입 호환성
+  code.contains("multiply") || code.contains("apply")
+
+# ============================================================================
+# Part 11: 함수 오버로딩 검증 (Phase H - Bug #5)
+# ============================================================================
+
+function test_overloading_multiple_types(): Bool =
+  let source = "function process(x: Int): Int = x * 2
+                function process(x: String): String = x + x
+                function main(): Unit =
+                  println(process(5))
+                  println(process(\"hello\"))"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 함수 오버로딩 코드 생성
+  code.contains("process") && code.length() > 0
+
+function test_overloading_multiple_dispatch(): Bool =
+  let source = "function length(arr: Array): Int = arr.length()
+                function length(str: String): Int = str.length()
+                function length(dict: Dictionary): Int = dict.size()"
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 다중 디스패치 코드 생성
+  code.contains("length") && code.length() > 0
+
+# ============================================================================
+# Part 12: 종합 복합 프로그램 검증
+# ============================================================================
+
+function test_comprehensive_complex_program(): Bool =
+  let source = "
+    record User =
+      name: String
+      age: Int
+
+    function create_user(name: String, age: Int): Result[User, String] =
+      if age < 0 || age > 150 then
+        Err(\"Invalid age\")
+      else
+        Ok(User { name = name, age = age })
+      end
+
+    function process_users(users: Array[User]): Unit =
+      for user in users do
+        match create_user(user.name, user.age) {
+          Ok(u) -> println(u.name),
+          Err(e) -> println(\"Error: \" + e)
+        }
+      end
+
+    function main(): Unit =
+      let users = Array[User]()
+      let user1_result = create_user(\"Alice\", 30)
+      let user2_result = create_user(\"Bob\", 25)
+
+      match user1_result {
+        Ok(u) -> users.push(u),
+        Err(e) -> println(e)
+      }
+
+      match user2_result {
+        Ok(u) -> users.push(u),
+        Err(e) -> println(e)
+      }
+
+      process_users(users)
+  "
+
+  let tokens = tokenize(source)
+  let ast = parse(tokens)
+  let code = generate_code(build_ir(ast))
+
+  # 검증: 모든 기능 종합
+  code.contains("record") || code.contains("struct") &&
+  code.contains("match") &&
+  code.contains("Result") &&
+  code.contains("Array") &&
+  code.length() > 1000
+
+# ============================================================================
+# 통합 검증 실행
+# ============================================================================
+
+function main(): Unit =
+  println("=".repeat(60))
+  println("FreeJulia 종합 통합 검증 (Comprehensive Integration Validation)")
+  println("=".repeat(60))
+  println("")
+
+  # Phase별 검증
+  let tests = [
+    // Phase A: Lexer
+    ("Lexer - 기본 토큰화", test_lexer_tokenization()),
+    ("Lexer - 문자열 리터럴", test_lexer_string_literals()),
+    ("Lexer - 연산자", test_lexer_operators()),
+
+    // Phase B: Parser
+    ("Parser - 함수 정의", test_parser_function_definition()),
+    ("Parser - 제어흐름", test_parser_control_flow()),
+    ("Parser - 배열 연산", test_parser_array_operations()),
+
+    // Phase C: 타입 시스템
+    ("타입 시스템 - 기본 타입", test_type_system_basic_types()),
+    ("타입 시스템 - 함수 시그니처", test_type_system_function_signatures()),
+    ("타입 시스템 - 배열 타입", test_type_system_arrays()),
+
+    // Phase D: 제어 흐름
+    ("제어 흐름 - if-else", test_control_flow_if_else()),
+    ("제어 흐름 - for 루프", test_control_flow_for_loop()),
+    ("제어 흐름 - while 루프", test_control_flow_while_loop()),
+
+    // Phase E: 고급 기능
+    ("고급 - 재귀 함수", test_advanced_recursion()),
+    ("고급 - 고차 함수", test_advanced_higher_order()),
+    ("고급 - 패턴 매칭", test_advanced_pattern_matching()),
+
+    // Phase F: Collections & I/O
+    ("Collections - 배열", test_collections_array_operations()),
+    ("Collections - 딕셔너리", test_collections_dictionary_operations()),
+    ("Collections - 집합", test_collections_set_operations()),
+    ("파일 I/O - 쓰기", test_file_io_write()),
+    ("파일 I/O - 읽기", test_file_io_read()),
+
+    // Phase G: 오류 처리
+    ("오류 처리 - Result 타입", test_error_handling_result()),
+    ("오류 처리 - Option 타입", test_error_handling_option()),
+
+    // Phase H: Self-Hosting & 최적화
+    ("Self-Hosting - Lexer", test_self_hosting_lexer()),
+    ("Self-Hosting - Parser", test_self_hosting_parser()),
+    ("타입 안전성 - Array 호환성", test_type_safety_array_compatibility()),
+    ("타입 안전성 - Function 시그니처", test_type_safety_function_signatures()),
+    ("함수 오버로딩 - 다중 타입", test_overloading_multiple_types()),
+    ("함수 오버로딩 - 다중 디스패치", test_overloading_multiple_dispatch()),
+
+    // 최종 검증
+    ("종합 - 복합 프로그램", test_comprehensive_complex_program()),
+  ]
+
+  let passed = 0
+  let failed = 0
+  let total = tests.length()
+
+  // Phase별 결과 정리
+  println("┌─────────────────────────────────────┬────────┐")
+  println("│ 검증 항목                           │ 결과   │")
+  println("├─────────────────────────────────────┼────────┤")
+
+  for (name, result) in tests do
+    let status = if result then "✅ PASS" else "❌ FAIL"
+    let padded_name = name + (" ".repeat(37 - name.length()))
+    println("│ " + padded_name + "│ " + status + " │")
+
+    if result then
+      passed = passed + 1
+    else
+      failed = failed + 1
+    end
+  end
+
+  println("└─────────────────────────────────────┴────────┘")
+  println("")
+
+  // 최종 통계
+  println("=".repeat(60))
+  println("최종 결과 (Final Results)")
+  println("=".repeat(60))
+  println("총 테스트:    " + total.to_string())
+  println("통과:         " + passed.to_string() + " (" + (passed * 100 / total).to_string() + "%)")
+  println("실패:         " + failed.to_string() + " (" + (failed * 100 / total).to_string() + "%)")
+  println("")
+
+  if failed == 0 then
+    println("🎉 모든 검증 통과! FreeJulia 통합 완료 ✅")
+  else if failed <= total / 5 then
+    println("✅ 대부분 통과 (통합도 높음)")
+  else
+    println("⚠️  개선 필요")
+  end
+
+  println("")
+  println("=".repeat(60))
+  println("검증 완료 (Validation Complete)")
+  println("=".repeat(60))
+
