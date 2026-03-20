@@ -35,15 +35,39 @@ func (p *Parser) Parse() (*ast.Program, error) {
 			break
 		}
 
-		if p.check(lexer.TknFn) {
-			def, err := p.parseFunctionDef()
+		// Handle import statements
+		if p.check(lexer.TknImport) {
+			def, err := p.parseImportStatement()
 			if err != nil {
 				p.errors = append(p.errors, err.Error())
-				p.synchronize() // Error recovery: skip to next definition
+				p.synchronize()
 				continue
 			}
 			if def != nil {
 				definitions = append(definitions, def)
+			}
+		} else if p.check(lexer.TknFn) {
+			// Check for extern fn
+			if p.peekAhead(1) != nil && p.peekAhead(1).Type == lexer.TknIdentifier && p.peekAhead(1).Text == "extern" {
+				def, err := p.parseExternDef()
+				if err != nil {
+					p.errors = append(p.errors, err.Error())
+					p.synchronize()
+					continue
+				}
+				if def != nil {
+					definitions = append(definitions, def)
+				}
+			} else {
+				def, err := p.parseFunctionDef()
+				if err != nil {
+					p.errors = append(p.errors, err.Error())
+					p.synchronize() // Error recovery: skip to next definition
+					continue
+				}
+				if def != nil {
+					definitions = append(definitions, def)
+				}
 			}
 		} else if p.check(lexer.TknType) {
 			def, err := p.parseTypeDef()
@@ -1046,4 +1070,92 @@ func (p *Parser) synchronize() {
 
 		p.advance()
 	}
+}
+
+// parseImportStatement parses an import statement
+func (p *Parser) parseImportStatement() (*ast.ImportStatement, error) {
+	if !p.match(lexer.TknImport) {
+		return nil, nil
+	}
+
+	if !p.match(lexer.TknString) {
+		return nil, fmt.Errorf("expected string module name at %d:%d", p.current().Line, p.current().Column)
+	}
+
+	module := p.previous().Text
+	// Remove quotes from string literal
+	if len(module) >= 2 {
+		module = module[1 : len(module)-1]
+	}
+
+	return &ast.ImportStatement{
+		Module: module,
+	}, nil
+}
+
+// parseExternDef parses an extern function declaration
+func (p *Parser) parseExternDef() (*ast.ExternDef, error) {
+	if !p.match(lexer.TknFn) {
+		return nil, nil
+	}
+
+	// Skip 'extern' keyword if present
+	if p.check(lexer.TknIdentifier) && p.current().Text == "extern" {
+		p.advance()
+	}
+
+	name := p.current().Text
+	if !p.match(lexer.TknIdentifier) {
+		return nil, fmt.Errorf("expected function name at %d:%d", p.current().Line, p.current().Column)
+	}
+
+	if !p.match(lexer.TknLParen) {
+		return nil, fmt.Errorf("expected '(' at %d:%d", p.current().Line, p.current().Column)
+	}
+
+	params := []ast.Parameter{}
+	if !p.check(lexer.TknRParen) {
+		for {
+			paramName := p.current().Text
+			if !p.match(lexer.TknIdentifier) {
+				return nil, fmt.Errorf("expected parameter name at %d:%d", p.current().Line, p.current().Column)
+			}
+
+			if !p.match(lexer.TknColon) {
+				return nil, fmt.Errorf("expected ':' at %d:%d", p.current().Line, p.current().Column)
+			}
+
+			typ := p.parseType()
+
+			params = append(params, ast.Parameter{
+				Name: paramName,
+				Type: typ,
+			})
+
+			if !p.check(lexer.TknComma) {
+				break
+			}
+			p.advance()
+		}
+	}
+
+	if !p.match(lexer.TknRParen) {
+		return nil, fmt.Errorf("expected ')' at %d:%d", p.current().Line, p.current().Column)
+	}
+
+	returnType := p.parseType()
+
+	return &ast.ExternDef{
+		Name:       name,
+		Parameters: params,
+		ReturnType: returnType,
+	}, nil
+}
+
+// peekAhead returns the token at offset positions ahead
+func (p *Parser) peekAhead(offset int) *lexer.Token {
+	if p.pos+offset >= len(p.tokens) {
+		return nil
+	}
+	return &p.tokens[p.pos+offset]
 }

@@ -31,14 +31,33 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	g.writeLine("#include <stdlib.h>")
 	g.writeLine("#include <string.h>")
 	g.writeLine("#include <stdbool.h>")
+
+	// Process imports and write additional headers
+	for _, def := range program.Definitions {
+		if imp, ok := def.(*ast.ImportStatement); ok {
+			switch imp.Module {
+			case "math":
+				g.writeLine("#include <math.h>")
+			case "stdio":
+				// Already included
+			case "string":
+				// string functions in string.h already included
+			case "stdlib":
+				// stdlib.h already included
+			}
+		}
+	}
 	g.writeLine("")
 
-	// Forward declarations for functions (except main)
+	// Forward declarations for functions (except main) and extern functions
 	for _, def := range program.Definitions {
-		if fn, ok := def.(*ast.FunctionDef); ok {
-			if fn.Name != "main" {
-				g.writeFunctionDeclaration(fn)
+		switch d := def.(type) {
+		case *ast.FunctionDef:
+			if d.Name != "main" {
+				g.writeFunctionDeclaration(d)
 			}
+		case *ast.ExternDef:
+			g.writeExternDeclaration(d)
 		}
 	}
 	g.writeLine("")
@@ -95,6 +114,13 @@ func (g *Generator) writeFunctionDeclaration(fn *ast.FunctionDef) {
 	params := g.generateParameterList(fn.Parameters)
 	returnType := g.generateType(fn.ReturnType)
 	g.writeLine(fmt.Sprintf("%s %s(%s);", returnType, fn.Name, params))
+}
+
+// writeExternDeclaration writes extern function declaration
+func (g *Generator) writeExternDeclaration(ext *ast.ExternDef) {
+	params := g.generateParameterList(ext.Parameters)
+	returnType := g.generateType(ext.ReturnType)
+	g.writeLine(fmt.Sprintf("extern %s %s(%s);", returnType, ext.Name, params))
 }
 
 // writeStructDefinition writes struct definition
@@ -460,6 +486,30 @@ func (g *Generator) generateCallExpression(call *ast.CallExpression) string {
 	var args []string
 	for _, arg := range call.Arguments {
 		args = append(args, g.generateExpression(arg))
+	}
+
+	// Handle builtin functions
+	if fnIdent, ok := call.Function.(*ast.Identifier); ok {
+		switch fnIdent.Name {
+		case "println":
+			if len(args) == 0 {
+				return `printf("\n")`
+			}
+			// println(arg) → printf("%s\n", arg)
+			return fmt.Sprintf(`printf("%%s\n", %s)`, args[0])
+		case "print":
+			if len(args) == 0 {
+				return `printf("")`
+			}
+			// print(arg) → printf("%s", arg)
+			return fmt.Sprintf(`printf("%%s", %s)`, args[0])
+		case "len":
+			if len(args) == 1 {
+				// len(array) → simplified as array length check
+				// For arrays: would need runtime length info
+				return fmt.Sprintf(`(sizeof(%s)/sizeof(*%s))`, args[0], args[0])
+			}
+		}
 	}
 
 	return fmt.Sprintf("%s(%s)", fn, strings.Join(args, ", "))

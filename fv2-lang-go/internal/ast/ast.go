@@ -54,6 +54,23 @@ type EnumDef struct {
 
 func (*EnumDef) definitionNode() {}
 
+// ExternDef represents an extern function declaration
+type ExternDef struct {
+	Name       string
+	Parameters []Parameter
+	ReturnType *Type
+	Library    string // optional library name from @link annotation
+}
+
+func (*ExternDef) definitionNode() {}
+
+// ImportStatement represents an import declaration
+type ImportStatement struct {
+	Module string // module name like "stdio", "math", etc.
+}
+
+func (*ImportStatement) definitionNode() {}
+
 // Parameter represents a function parameter
 type Parameter struct {
 	Name string
