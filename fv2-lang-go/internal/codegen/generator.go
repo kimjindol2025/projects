@@ -700,6 +700,31 @@ func (g *Generator) inferTypeFromExpression(expr ast.Expression) string {
 			return fmt.Sprintf("%s*", elemType)
 		}
 		return "void*"
+	case *ast.CallExpression:
+		// Check if it's an extern function call
+		if ident, ok := e.Function.(*ast.Identifier); ok {
+			if retType, exists := g.externFuncTypes[ident.Name]; exists {
+				// Return C type based on FV return type
+				if retType == "f64" {
+					return "double"
+				} else if retType == "i64" {
+					return "long long"
+				} else if retType == "string" {
+					return "char*"
+				} else if retType == "bool" {
+					return "bool"
+				}
+			}
+		}
+		return "long long" // Default for regular function calls
+	case *ast.BinaryExpression:
+		// If either operand is double, result is double
+		leftType := g.inferTypeFromExpression(e.Left)
+		rightType := g.inferTypeFromExpression(e.Right)
+		if leftType == "double" || rightType == "double" {
+			return "double"
+		}
+		return "long long"
 	default:
 		// Default to long long for unknown types
 		return "long long"
