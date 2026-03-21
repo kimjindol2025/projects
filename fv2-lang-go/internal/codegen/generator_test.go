@@ -402,3 +402,144 @@ func TestComplexProgram(t *testing.T) {
 		t.Errorf("function call not generated")
 	}
 }
+
+func TestExternFnCodegen(t *testing.T) {
+	gen := New()
+
+	program := &ast.Program{
+		Definitions: []ast.Definition{
+			&ast.ExternDef{
+				Name: "printf",
+				Parameters: []ast.Parameter{
+					{Name: "fmt", Type: &ast.Type{Name: "string"}},
+				},
+				ReturnType: nil, // No return type (void)
+			},
+		},
+		MainBody: []ast.Statement{},
+	}
+
+	code, err := gen.Generate(program)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(code, "extern void printf") {
+		t.Errorf("expected 'extern void printf', got:\n%s", code)
+	}
+}
+
+func TestArrayDeclarationCodegen(t *testing.T) {
+	gen := New()
+
+	program := &ast.Program{
+		Definitions: []ast.Definition{},
+		MainBody: []ast.Statement{
+			&ast.LetStatement{
+				Name: "nums",
+				Type: nil,
+				Init: &ast.ArrayExpression{
+					Elements: []ast.Expression{
+						&ast.IntegerLiteral{Value: 10},
+						&ast.IntegerLiteral{Value: 20},
+						&ast.IntegerLiteral{Value: 30},
+					},
+				},
+			},
+		},
+	}
+
+	code, err := gen.Generate(program)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(code, "long long nums[] = {10, 20, 30}") {
+		t.Errorf("expected array declaration with [] syntax, got:\n%s", code)
+	}
+}
+
+func TestIndexExpressionCodegen(t *testing.T) {
+	gen := New()
+
+	program := &ast.Program{
+		Definitions: []ast.Definition{},
+		MainBody: []ast.Statement{
+			&ast.ExpressionStatement{
+				Expression: &ast.IndexExpression{
+					Object: &ast.Identifier{Name: "arr"},
+					Index:  &ast.IntegerLiteral{Value: 0},
+				},
+			},
+		},
+	}
+
+	code, err := gen.Generate(program)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(code, "arr[0]") {
+		t.Errorf("expected 'arr[0]', got:\n%s", code)
+	}
+}
+
+func TestElseIfCodegen(t *testing.T) {
+	gen := New()
+
+	program := &ast.Program{
+		Definitions: []ast.Definition{},
+		MainBody: []ast.Statement{
+			&ast.IfStatement{
+				Condition: &ast.BinaryExpression{
+					Left:     &ast.Identifier{Name: "x"},
+					Operator: ">",
+					Right:    &ast.IntegerLiteral{Value: 20},
+				},
+				ThenBody: []ast.Statement{
+					&ast.ExpressionStatement{
+						Expression: &ast.CallExpression{
+							Function: &ast.Identifier{Name: "println"},
+							Arguments: []ast.Expression{
+								&ast.StringLiteral{Value: "big"},
+							},
+						},
+					},
+				},
+				ElseBody: []ast.Statement{
+					&ast.IfStatement{
+						Condition: &ast.BinaryExpression{
+							Left:     &ast.Identifier{Name: "x"},
+							Operator: ">",
+							Right:    &ast.IntegerLiteral{Value: 5},
+						},
+						ThenBody: []ast.Statement{
+							&ast.ExpressionStatement{
+								Expression: &ast.CallExpression{
+									Function: &ast.Identifier{Name: "println"},
+									Arguments: []ast.Expression{
+										&ast.StringLiteral{Value: "medium"},
+									},
+								},
+							},
+						},
+						ElseBody: []ast.Statement{},
+					},
+				},
+			},
+		},
+	}
+
+	code, err := gen.Generate(program)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(code, "} else {") {
+		t.Errorf("expected 'else' block, got:\n%s", code)
+	}
+
+	if !strings.Contains(code, "if (") {
+		t.Errorf("expected 'if' statement, got:\n%s", code)
+	}
+}

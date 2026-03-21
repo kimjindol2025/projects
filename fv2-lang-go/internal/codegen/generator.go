@@ -259,6 +259,21 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 
 // generateLetStatement generates let binding
 func (g *Generator) generateLetStatement(let *ast.LetStatement) {
+	// Special handling for array declarations
+	if arr, ok := let.Init.(*ast.ArrayExpression); ok && len(arr.Elements) > 0 {
+		// Infer element type from first element
+		elemCType := g.inferTypeFromExpression(arr.Elements[0])
+		fvElemType := g.inferFVTypeFromExpression(arr.Elements[0])
+		g.varTypes[let.Name] = "[]" + fvElemType
+
+		var elems []string
+		for _, el := range arr.Elements {
+			elems = append(elems, g.generateExpression(el))
+		}
+		g.writeLine(fmt.Sprintf("%s %s[] = {%s};", elemCType, let.Name, strings.Join(elems, ", ")))
+		return
+	}
+
 	varType := ""
 	fvType := ""  // FV type name for tracking
 
@@ -485,6 +500,12 @@ func (g *Generator) generateExpression(expr ast.Expression) string {
 		return g.generateIndexExpression(e)
 	case *ast.IfExpression:
 		return g.generateIfExpression(e)
+	case *ast.MethodCallExpression:
+		return g.generateMethodCallExpression(e)
+	case *ast.StructExpression:
+		return g.generateStructExpression(e)
+	case *ast.ErrorPropagation:
+		return g.generateExpression(e.Expression)
 	}
 
 	return "0"
@@ -661,6 +682,25 @@ func (g *Generator) generateIfExpression(ifExpr *ast.IfExpression) string {
 	}
 
 	return fmt.Sprintf("(%s ? %s : 0)", cond, then)
+}
+
+// generateMethodCallExpression generates method call
+func (g *Generator) generateMethodCallExpression(methodCall *ast.MethodCallExpression) string {
+	obj := g.generateExpression(methodCall.Object)
+	var args []string
+	for _, arg := range methodCall.Arguments {
+		args = append(args, g.generateExpression(arg))
+	}
+	return fmt.Sprintf("%s.%s(%s)", obj, methodCall.Method, strings.Join(args, ", "))
+}
+
+// generateStructExpression generates struct literal
+func (g *Generator) generateStructExpression(structExpr *ast.StructExpression) string {
+	var fields []string
+	for k, v := range structExpr.Fields {
+		fields = append(fields, fmt.Sprintf(".%s = %s", k, g.generateExpression(v)))
+	}
+	return fmt.Sprintf("(%s){%s}", structExpr.Name, strings.Join(fields, ", "))
 }
 
 // Helper functions

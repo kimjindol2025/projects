@@ -404,7 +404,16 @@ func (p *Parser) parseIfStatement() (ast.Statement, error) {
 
 	var elseBody []ast.Statement
 	if p.match(lexer.TknElse) {
-		if p.match(lexer.TknLBrace) {
+		if p.check(lexer.TknIf) {
+			// Handle else if chain
+			p.advance() // consume 'if'
+			elseIfStmt, err := p.parseIfStatement()
+			if err != nil {
+				return nil, err
+			}
+			elseBody = []ast.Statement{elseIfStmt}
+		} else if p.match(lexer.TknLBrace) {
+			// Handle else { } block
 			for !p.check(lexer.TknRBrace) && !p.isAtEnd() {
 				stmt, err := p.parseStatement()
 				if err != nil {
@@ -1138,7 +1147,11 @@ func (p *Parser) parseExternDef() (*ast.ExternDef, error) {
 		return nil, fmt.Errorf("expected ')' at %d:%d", p.current().Line, p.current().Column)
 	}
 
-	returnType := p.parseType()
+	// Return type is optional for extern functions (void if omitted)
+	var returnType *ast.Type
+	if !p.check(lexer.TknSemicolon) && !p.isAtEnd() {
+		returnType = p.parseType()
+	}
 
 	return &ast.ExternDef{
 		Name:       name,
