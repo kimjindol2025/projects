@@ -54,6 +54,8 @@ func New(input string) (*Lexer, error) {
 		"trait":     TknTrait,
 		"impl":      TknImpl,
 		"return":    TknReturn,
+		"break":     TknBreak,
+		"continue":  TknContinue,
 		"module":    TknModule,
 		"import":    TknImport,
 		"true":      TknTrue,

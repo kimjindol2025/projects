@@ -217,6 +217,25 @@ type AssignStatement struct {
 
 func (*AssignStatement) statementNode() {}
 
+// BreakStatement represents a break statement
+type BreakStatement struct{}
+
+func (*BreakStatement) statementNode() {}
+
+// ContinueStatement represents a continue statement
+type ContinueStatement struct{}
+
+func (*ContinueStatement) statementNode() {}
+
+// IndexAssignStatement represents arr[i] = val
+type IndexAssignStatement struct {
+	Array string
+	Index Expression
+	Value Expression
+}
+
+func (*IndexAssignStatement) statementNode() {}
+
 // Expression represents an expression
 type Expression interface {
 	expressionNode()

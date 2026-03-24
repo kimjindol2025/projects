@@ -74,6 +74,16 @@ func New() *Checker {
 		}, "function")
 	}
 
+	// Command-line argument functions
+	globalScope.Define("argc", &BuiltinFunctionType{
+		Name:       "argc",
+		IsVariadic: false,
+	}, "function")
+	globalScope.Define("argv", &BuiltinFunctionType{
+		Name:       "argv",
+		IsVariadic: false,
+	}, "function")
+
 	return &Checker{
 		GlobalScope: globalScope,
 		CurrentScope: globalScope,
@@ -223,6 +233,13 @@ func (c *Checker) checkStatement(stmt ast.Statement) {
 		c.checkBlockStatement(s)
 	case *ast.AssignStatement:
 		c.checkExpression(s.Value)
+	case *ast.BreakStatement:
+		// valid in loop context - no type check needed
+	case *ast.ContinueStatement:
+		// valid in loop context - no type check needed
+	case *ast.IndexAssignStatement:
+		c.checkExpression(s.Index)
+		c.checkExpression(s.Value)
 	}
 }
 
@@ -233,12 +250,24 @@ func (c *Checker) checkLetStatement(let *ast.LetStatement) {
 	if let.Type != nil {
 		declaredType = c.astTypeToCheckerType(let.Type)
 
-		// Verify init matches declared type
-		if !initType.Equal(declaredType) {
-			c.addError(0, 0, fmt.Sprintf(
-				"let %s: expected type %s, got %s",
-				let.Name, declaredType.TypeString(), initType.TypeString(),
-			))
+		// Skip type mismatch check for array declarations with empty literal []
+		// (the declared type from annotation takes precedence)
+		isArrayDecl := let.Type != nil && let.Type.IsArray
+		isEmptyArray := false
+		if at, ok := initType.(*ArrayType); ok {
+			if pt, ok2 := at.ElementType.(*PrimitiveType); ok2 {
+				isEmptyArray = pt.Name == "unknown"
+			}
+		}
+
+		if !isArrayDecl || !isEmptyArray {
+			// Verify init matches declared type
+			if !initType.Equal(declaredType) {
+				c.addError(0, 0, fmt.Sprintf(
+					"let %s: expected type %s, got %s",
+					let.Name, declaredType.TypeString(), initType.TypeString(),
+				))
+			}
 		}
 	} else {
 		declaredType = initType
@@ -528,11 +557,11 @@ func (c *Checker) checkCallExpression(call *ast.CallExpression) Type {
 		switch bt.Name {
 		case "str_eq":
 			return &PrimitiveType{Name: "bool"}
-		case "str_len", "str_at", "len", "abs", "min", "max", "to_int":
+		case "str_len", "str_at", "len", "abs", "min", "max", "to_int", "argc":
 			return &PrimitiveType{Name: "i64"}
 		case "to_float":
 			return &PrimitiveType{Name: "f64"}
-		case "str_concat", "str_sub", "str_from_char", "int_to_str", "read_file":
+		case "str_concat", "str_sub", "str_from_char", "int_to_str", "read_file", "argv":
 			return &PrimitiveType{Name: "string"}
 		default:
 			return &PrimitiveType{Name: "none"}

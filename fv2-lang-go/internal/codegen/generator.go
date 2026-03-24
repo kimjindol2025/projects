@@ -128,7 +128,7 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	}
 
 	// Main function (either from definition or generated)
-	g.writeLine("int main() {")
+	g.writeLine("int main(int _fv_argc, char** _fv_argv) {")
 	g.indent++
 
 	if mainFunc != nil {
@@ -285,6 +285,12 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateBlockStatement(s)
 	case *ast.AssignStatement:
 		g.generateAssignStatement(s)
+	case *ast.BreakStatement:
+		g.writeLine("break;")
+	case *ast.ContinueStatement:
+		g.writeLine("continue;")
+	case *ast.IndexAssignStatement:
+		g.generateIndexAssignStatement(s)
 	}
 }
 
@@ -293,9 +299,39 @@ func (g *Generator) generateAssignStatement(assign *ast.AssignStatement) {
 	g.writeLine(fmt.Sprintf("%s = %s;", assign.Name, val))
 }
 
+func (g *Generator) generateIndexAssignStatement(s *ast.IndexAssignStatement) {
+	idx := g.generateExpression(s.Index)
+	val := g.generateExpression(s.Value)
+	// For dynamic arrays, use the _data suffix
+	arrType := g.varTypes[s.Array]
+	if strings.HasPrefix(arrType, "[]") {
+		g.writeLine(fmt.Sprintf("%s_data[%s] = %s;", s.Array, idx, val))
+	} else {
+		g.writeLine(fmt.Sprintf("%s[%s] = %s;", s.Array, idx, val))
+	}
+}
+
 // generateLetStatement generates let binding
 func (g *Generator) generateLetStatement(let *ast.LetStatement) {
-	// Special handling for array declarations
+	// Special handling for dynamic array declarations: []i64, []string, etc.
+	if let.Type != nil && let.Type.IsArray {
+		elemTypeName := ""
+		if let.Type.ElementType != nil {
+			elemTypeName = let.Type.ElementType.Name
+		}
+		fvArrayType := "[]" + elemTypeName
+		g.varTypes[let.Name] = fvArrayType
+
+		// Determine C element type
+		elemCType := g.arrayElemCType(elemTypeName)
+
+		// Generate: elemCType name_data[65536]; long long name_len = 0;
+		g.writeLine(fmt.Sprintf("%s %s_data[65536];", elemCType, let.Name))
+		g.writeLine(fmt.Sprintf("long long %s_len = 0;", let.Name))
+		return
+	}
+
+	// Special handling for non-empty array literals
 	if arr, ok := let.Init.(*ast.ArrayExpression); ok && len(arr.Elements) > 0 {
 		// Infer element type from first element
 		elemCType := g.inferTypeFromExpression(arr.Elements[0])
@@ -327,6 +363,22 @@ func (g *Generator) generateLetStatement(let *ast.LetStatement) {
 
 	initValue := g.generateExpression(let.Init)
 	g.writeLine(fmt.Sprintf("%s %s = %s;", varType, let.Name, initValue))
+}
+
+// arrayElemCType returns the C type for an FV array element type name
+func (g *Generator) arrayElemCType(elemTypeName string) string {
+	switch elemTypeName {
+	case "i64":
+		return "long long"
+	case "f64":
+		return "double"
+	case "string":
+		return "char*"
+	case "bool":
+		return "bool"
+	default:
+		return "long long"
+	}
 }
 
 // generateConstStatement generates const binding
@@ -619,6 +671,15 @@ func (g *Generator) generateCallExpression(call *ast.CallExpression) string {
 			return g.generatePrint(call.Arguments[0])
 		case "len":
 			if len(args) == 1 {
+				// Check if it's a dynamic array variable
+				if len(call.Arguments) == 1 {
+					if ident, ok := call.Arguments[0].(*ast.Identifier); ok {
+						arrType := g.varTypes[ident.Name]
+						if strings.HasPrefix(arrType, "[]") {
+							return fmt.Sprintf("%s_len", ident.Name)
+						}
+					}
+				}
 				return fmt.Sprintf(`(sizeof(%s)/sizeof(*%s))`, args[0], args[0])
 			}
 		case "abs":
@@ -673,6 +734,12 @@ func (g *Generator) generateCallExpression(call *ast.CallExpression) string {
 		case "read_file":
 			if len(args) == 1 {
 				return fmt.Sprintf(`fvx_read_file(%s)`, args[0])
+			}
+		case "argc":
+			return "((long long)_fv_argc)"
+		case "argv":
+			if len(args) == 1 {
+				return fmt.Sprintf("_fv_argv[%s]", args[0])
 			}
 		}
 	}
@@ -735,6 +802,17 @@ func (g *Generator) inferFVTypeOfExpression(expr ast.Expression) string {
 		}
 	}
 
+	// For index expressions on dynamic arrays, return element type
+	if indexExpr, ok := expr.(*ast.IndexExpression); ok {
+		if ident, ok2 := indexExpr.Object.(*ast.Identifier); ok2 {
+			if arrType, exists := g.varTypes[ident.Name]; exists {
+				if strings.HasPrefix(arrType, "[]") {
+					return arrType[2:] // strip "[]" prefix to get element type
+				}
+			}
+		}
+	}
+
 	// Otherwise, infer from the expression itself
 	return g.inferFVTypeFromExpression(expr)
 }
@@ -765,6 +843,13 @@ func (g *Generator) generateFieldExpression(field *ast.FieldExpression) string {
 func (g *Generator) generateIndexExpression(index *ast.IndexExpression) string {
 	obj := g.generateExpression(index.Object)
 	idx := g.generateExpression(index.Index)
+	// For dynamic arrays, index the _data buffer
+	if ident, ok := index.Object.(*ast.Identifier); ok {
+		arrType := g.varTypes[ident.Name]
+		if strings.HasPrefix(arrType, "[]") {
+			return fmt.Sprintf("%s_data[%s]", obj, idx)
+		}
+	}
 	return fmt.Sprintf("%s[%s]", obj, idx)
 }
 
@@ -784,6 +869,23 @@ func (g *Generator) generateIfExpression(ifExpr *ast.IfExpression) string {
 // generateMethodCallExpression generates method call
 func (g *Generator) generateMethodCallExpression(methodCall *ast.MethodCallExpression) string {
 	obj := g.generateExpression(methodCall.Object)
+
+	// Handle array methods on dynamic arrays
+	if ident, ok := methodCall.Object.(*ast.Identifier); ok {
+		arrType := g.varTypes[ident.Name]
+		if strings.HasPrefix(arrType, "[]") {
+			switch methodCall.Method {
+			case "push":
+				if len(methodCall.Arguments) == 1 {
+					val := g.generateExpression(methodCall.Arguments[0])
+					return fmt.Sprintf("%s_data[%s_len++] = %s", obj, obj, val)
+				}
+			case "pop":
+				return fmt.Sprintf("%s_len--", obj)
+			}
+		}
+	}
+
 	var args []string
 	for _, arg := range methodCall.Arguments {
 		args = append(args, g.generateExpression(arg))
@@ -847,10 +949,12 @@ func (g *Generator) inferTypeFromExpression(expr ast.Expression) string {
 				return "char*"
 			case "str_eq":
 				return "bool"
-			case "str_len", "str_at", "len", "abs", "min", "max", "to_int":
+			case "str_len", "str_at", "len", "abs", "min", "max", "to_int", "argc":
 				return "long long"
 			case "to_float":
 				return "double"
+			case "argv":
+				return "char*"
 			}
 			// Check extern func return types
 			if retType, exists := g.externFuncTypes[ident.Name]; exists {
@@ -913,10 +1017,12 @@ func (g *Generator) inferFVTypeFromExpression(expr ast.Expression) string {
 				return "string"
 			case "str_eq":
 				return "bool"
-			case "str_len", "str_at", "len", "abs", "min", "max", "to_int":
+			case "str_len", "str_at", "len", "abs", "min", "max", "to_int", "argc":
 				return "i64"
 			case "to_float":
 				return "f64"
+			case "argv":
+				return "string"
 			}
 			if retType, exists := g.externFuncTypes[ident.Name]; exists {
 				return retType // Return the extern function's return type
