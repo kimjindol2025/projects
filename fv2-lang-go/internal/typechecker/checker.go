@@ -63,6 +63,17 @@ func New() *Checker {
 		IsVariadic: true,
 	}, "function")
 
+	// String builtin functions
+	for _, name := range []string{
+		"str_len", "str_at", "str_eq", "str_concat",
+		"str_sub", "str_from_char", "int_to_str", "read_file",
+	} {
+		globalScope.Define(name, &BuiltinFunctionType{
+			Name:       name,
+			IsVariadic: false,
+		}, "function")
+	}
+
 	return &Checker{
 		GlobalScope: globalScope,
 		CurrentScope: globalScope,
@@ -210,6 +221,8 @@ func (c *Checker) checkStatement(stmt ast.Statement) {
 		c.checkExpression(s.Expression)
 	case *ast.BlockStatement:
 		c.checkBlockStatement(s)
+	case *ast.AssignStatement:
+		c.checkExpression(s.Value)
 	}
 }
 
@@ -383,8 +396,24 @@ func (c *Checker) checkExpression(expr ast.Expression) Type {
 		return c.checkIfExpression(e)
 	case *ast.MatchExpression:
 		return c.checkMatchExpression(e)
+	case *ast.StructExpression:
+		return c.checkStructExpression(e)
+	case *ast.MethodCallExpression:
+		return c.checkMethodCallExpression(e)
 	}
 	return &PrimitiveType{Name: "none"}
+}
+
+func (c *Checker) checkStructExpression(structExpr *ast.StructExpression) Type {
+	sym := c.CurrentScope.Lookup(structExpr.Name)
+	if sym != nil {
+		return sym.Type
+	}
+	return &StructType{Name: structExpr.Name, Fields: make(map[string]Type)}
+}
+
+func (c *Checker) checkMethodCallExpression(methodCall *ast.MethodCallExpression) Type {
+	return &PrimitiveType{Name: "unknown"}
 }
 
 func (c *Checker) checkIdentifier(ident *ast.Identifier) Type {
@@ -491,15 +520,23 @@ func (c *Checker) checkCallExpression(call *ast.CallExpression) Type {
 
 	// Handle built-in functions
 	if bt, ok := fnType.(*BuiltinFunctionType); ok {
-		// Built-in functions like println, print accept any arguments
-		if bt.IsVariadic {
-			// Just check that arguments are valid expressions
-			for _, arg := range call.Arguments {
-				c.checkExpression(arg)
-			}
+		// Check all arguments are valid expressions
+		for _, arg := range call.Arguments {
+			c.checkExpression(arg)
+		}
+		// Return type based on builtin name
+		switch bt.Name {
+		case "str_eq":
+			return &PrimitiveType{Name: "bool"}
+		case "str_len", "str_at", "len", "abs", "min", "max", "to_int":
+			return &PrimitiveType{Name: "i64"}
+		case "to_float":
+			return &PrimitiveType{Name: "f64"}
+		case "str_concat", "str_sub", "str_from_char", "int_to_str", "read_file":
+			return &PrimitiveType{Name: "string"}
+		default:
 			return &PrimitiveType{Name: "none"}
 		}
-		return &PrimitiveType{Name: "none"}
 	}
 
 	c.addError(0, 0, "cannot call non-function")
@@ -616,6 +653,14 @@ func (c *Checker) astTypeToCheckerType(t *ast.Type) Type {
 
 	if t.IsArray {
 		return &ArrayType{ElementType: c.astTypeToCheckerType(t.ElementType)}
+	}
+
+	// Check if this is a registered struct type
+	sym := c.CurrentScope.Lookup(t.Name)
+	if sym != nil {
+		if st, ok := sym.Type.(*StructType); ok {
+			return st
+		}
 	}
 
 	return &PrimitiveType{Name: t.Name}

@@ -209,6 +209,14 @@ type BlockStatement struct {
 
 func (*BlockStatement) statementNode() {}
 
+// AssignStatement represents a variable assignment: name = value
+type AssignStatement struct {
+	Name  string
+	Value Expression
+}
+
+func (*AssignStatement) statementNode() {}
+
 // Expression represents an expression
 type Expression interface {
 	expressionNode()

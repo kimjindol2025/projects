@@ -301,6 +301,23 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 		return p.parseBlockStatement()
 	}
 
+	// Assignment statement: ident = expr  or  ident.field = expr
+	if p.check(lexer.TknIdentifier) {
+		savedPos := p.pos
+		name := p.current().Text
+		p.advance()
+		if p.match(lexer.TknAssign) {
+			val, err := p.parseExpression()
+			if err != nil {
+				return nil, err
+			}
+			p.match(lexer.TknSemicolon)
+			return &ast.AssignStatement{Name: name, Value: val}, nil
+		}
+		// Not assignment, backtrack
+		p.pos = savedPos
+	}
+
 	// Expression statement
 	expr, err := p.parseExpression()
 	if err != nil {
@@ -807,7 +824,39 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 	}
 
 	if p.match(lexer.TknIdentifier) {
-		return &ast.Identifier{Name: p.previous().Text}, nil
+		name := p.previous().Text
+		// struct literal: Name{field: value, ...}
+		if p.check(lexer.TknLBrace) {
+			// lookahead: check if next-next is identifier followed by colon
+			if next := p.peekAhead(1); next != nil && next.Type == lexer.TknIdentifier {
+				if colon := p.peekAhead(2); colon != nil && colon.Type == lexer.TknColon {
+					p.advance() // consume '{'
+					fields := make(map[string]ast.Expression)
+					for !p.check(lexer.TknRBrace) && !p.isAtEnd() {
+						fieldName := p.current().Text
+						if !p.match(lexer.TknIdentifier) {
+							return nil, fmt.Errorf("expected field name at %d:%d", p.current().Line, p.current().Column)
+						}
+						if !p.match(lexer.TknColon) {
+							return nil, fmt.Errorf("expected ':' after field name at %d:%d", p.current().Line, p.current().Column)
+						}
+						val, err := p.parseExpression()
+						if err != nil {
+							return nil, err
+						}
+						fields[fieldName] = val
+						if !p.match(lexer.TknComma) {
+							break
+						}
+					}
+					if !p.match(lexer.TknRBrace) {
+						return nil, fmt.Errorf("expected '}' at %d:%d", p.current().Line, p.current().Column)
+					}
+					return &ast.StructExpression{Name: name, Fields: fields}, nil
+				}
+			}
+		}
+		return &ast.Identifier{Name: name}, nil
 	}
 
 	if p.match(lexer.TknLBracket) {

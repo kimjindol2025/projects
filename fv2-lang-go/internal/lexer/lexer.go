@@ -300,7 +300,7 @@ func (l *Lexer) nextToken() (Token, error) {
 
 	token.Line = startLine
 	token.Column = startColumn
-	if token.Text == "" {
+	if token.Text == "" && token.Type != TknString {
 		token.Text = string(l.input[startPos:l.pos])
 	}
 
