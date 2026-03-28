@@ -1,0 +1,424 @@
+// Package parser implements an AST parser for mini FreeLang
+package parser
+
+import (
+	"fmt"
+
+	"github.com/user/freelang-evolving-compiler/internal/ast"
+	"github.com/user/freelang-evolving-compiler/internal/lexer"
+)
+
+type Parser struct {
+	l         *lexer.Lexer
+	curToken  ast.Token
+	peekToken ast.Token
+}
+
+// New creates a new parser for the input string
+func New(input string) *Parser {
+	l := lexer.New(input)
+	p := &Parser{l: l}
+	p.nextToken()
+	p.nextToken()
+	return p
+}
+
+func (p *Parser) nextToken() {
+	p.curToken = p.peekToken
+	p.peekToken = p.l.NextToken()
+}
+
+// ParseProgram parses a complete program
+func (p *Parser) ParseProgram() (*ast.Node, error) {
+	prog := &ast.Node{
+		Kind:     ast.NodeProgram,
+		Children: []*ast.Node{},
+	}
+
+	for p.curToken.Type != ast.TokenEOF {
+		stmt, err := p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+		if stmt != nil {
+			prog.Children = append(prog.Children, stmt)
+		}
+		p.skipSemicolons()
+	}
+
+	return prog, nil
+}
+
+func (p *Parser) parseStatement() (*ast.Node, error) {
+	switch p.curToken.Type {
+	case ast.TokenLet:
+		return p.parseLetDecl()
+	case ast.TokenFn:
+		return p.parseFnDecl()
+	case ast.TokenIf:
+		return p.parseIfStmt()
+	case ast.TokenFor:
+		return p.parseForStmt()
+	case ast.TokenReturn:
+		return p.parseReturnStmt()
+	case ast.TokenLBrace:
+		return p.parseBlockStmt()
+	case ast.TokenSemicolon:
+		p.nextToken()
+		return nil, nil
+	default:
+		// Try to parse as expression statement
+		expr, err := p.parseExpression(0)
+		if err != nil {
+			return nil, err
+		}
+		return expr, nil
+	}
+}
+
+func (p *Parser) parseLetDecl() (*ast.Node, error) {
+	letNode := &ast.Node{
+		Kind: ast.NodeLetDecl,
+		Line: p.curToken.Line,
+		Col:  p.curToken.Col,
+	}
+
+	p.nextToken() // consume 'let'
+
+	if p.curToken.Type != ast.TokenIdent {
+		return nil, fmt.Errorf("expected identifier after 'let'")
+	}
+
+	nameNode := &ast.Node{
+		Kind:  ast.NodeIdent,
+		Value: p.curToken.Value,
+		Line:  p.curToken.Line,
+		Col:   p.curToken.Col,
+	}
+	letNode.Children = append(letNode.Children, nameNode)
+
+	p.nextToken() // consume identifier
+
+	if p.curToken.Type != ast.TokenAssign {
+		return nil, fmt.Errorf("expected '=' after identifier")
+	}
+
+	p.nextToken() // consume '='
+
+	expr, err := p.parseExpression(0)
+	if err != nil {
+		return nil, err
+	}
+	letNode.Children = append(letNode.Children, expr)
+
+	return letNode, nil
+}
+
+func (p *Parser) parseFnDecl() (*ast.Node, error) {
+	fnNode := &ast.Node{
+		Kind: ast.NodeFnDecl,
+		Line: p.curToken.Line,
+		Col:  p.curToken.Col,
+	}
+
+	p.nextToken() // consume 'fn'
+
+	if p.curToken.Type != ast.TokenIdent {
+		return nil, fmt.Errorf("expected function name")
+	}
+
+	fnNode.Value = p.curToken.Value
+	p.nextToken()
+
+	if p.curToken.Type != ast.TokenLParen {
+		return nil, fmt.Errorf("expected '(' after function name")
+	}
+
+	p.nextToken()
+
+	// Parse parameters (simplified: just identifiers)
+	for p.curToken.Type != ast.TokenRParen {
+		if p.curToken.Type != ast.TokenIdent {
+			return nil, fmt.Errorf("expected parameter name")
+		}
+		param := &ast.Node{
+			Kind:  ast.NodeIdent,
+			Value: p.curToken.Value,
+		}
+		fnNode.Children = append(fnNode.Children, param)
+		p.nextToken()
+
+		if p.curToken.Type == ast.TokenColon {
+			p.nextToken()
+			if p.curToken.Type == ast.TokenIdent {
+				p.nextToken() // skip type for now
+			}
+		}
+
+		if p.curToken.Type == ast.TokenComma {
+			p.nextToken()
+		}
+	}
+
+	p.nextToken() // consume ')'
+
+	if p.curToken.Type != ast.TokenLBrace {
+		return nil, fmt.Errorf("expected '{' for function body")
+	}
+
+	body, err := p.parseBlockStmt()
+	if err != nil {
+		return nil, err
+	}
+	fnNode.Children = append(fnNode.Children, body)
+
+	return fnNode, nil
+}
+
+func (p *Parser) parseIfStmt() (*ast.Node, error) {
+	ifNode := &ast.Node{
+		Kind: ast.NodeIfStmt,
+		Line: p.curToken.Line,
+		Col:  p.curToken.Col,
+	}
+
+	p.nextToken() // consume 'if'
+
+	cond, err := p.parseExpression(0)
+	if err != nil {
+		return nil, err
+	}
+	ifNode.Children = append(ifNode.Children, cond)
+
+	if p.curToken.Type != ast.TokenLBrace {
+		return nil, fmt.Errorf("expected '{' after if condition")
+	}
+
+	body, err := p.parseBlockStmt()
+	if err != nil {
+		return nil, err
+	}
+	ifNode.Children = append(ifNode.Children, body)
+
+	return ifNode, nil
+}
+
+func (p *Parser) parseForStmt() (*ast.Node, error) {
+	forNode := &ast.Node{
+		Kind: ast.NodeForStmt,
+		Line: p.curToken.Line,
+		Col:  p.curToken.Col,
+	}
+
+	p.nextToken() // consume 'for'
+
+	if p.curToken.Type != ast.TokenIdent {
+		return nil, fmt.Errorf("expected iterator variable")
+	}
+
+	iter := &ast.Node{
+		Kind:  ast.NodeIdent,
+		Value: p.curToken.Value,
+	}
+	forNode.Children = append(forNode.Children, iter)
+	p.nextToken()
+
+	if p.curToken.Type != ast.TokenIn {
+		return nil, fmt.Errorf("expected 'in' after iterator")
+	}
+
+	p.nextToken()
+
+	rng, err := p.parseExpression(0)
+	if err != nil {
+		return nil, err
+	}
+	forNode.Children = append(forNode.Children, rng)
+
+	if p.curToken.Type != ast.TokenLBrace {
+		return nil, fmt.Errorf("expected '{' for loop body")
+	}
+
+	body, err := p.parseBlockStmt()
+	if err != nil {
+		return nil, err
+	}
+	forNode.Children = append(forNode.Children, body)
+
+	return forNode, nil
+}
+
+func (p *Parser) parseReturnStmt() (*ast.Node, error) {
+	retNode := &ast.Node{
+		Kind: ast.NodeReturn,
+		Line: p.curToken.Line,
+		Col:  p.curToken.Col,
+	}
+
+	p.nextToken() // consume 'return'
+
+	if p.curToken.Type == ast.TokenSemicolon || p.curToken.Type == ast.TokenRBrace {
+		return retNode, nil
+	}
+
+	expr, err := p.parseExpression(0)
+	if err != nil {
+		return nil, err
+	}
+	retNode.Children = append(retNode.Children, expr)
+
+	return retNode, nil
+}
+
+func (p *Parser) parseBlockStmt() (*ast.Node, error) {
+	block := &ast.Node{
+		Kind: ast.NodeBlockStmt,
+		Line: p.curToken.Line,
+		Col:  p.curToken.Col,
+	}
+
+	p.nextToken() // consume '{'
+
+	for p.curToken.Type != ast.TokenRBrace && p.curToken.Type != ast.TokenEOF {
+		stmt, err := p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+		if stmt != nil {
+			block.Children = append(block.Children, stmt)
+		}
+		p.skipSemicolons()
+	}
+
+	if p.curToken.Type != ast.TokenRBrace {
+		return nil, fmt.Errorf("expected '}'")
+	}
+
+	p.nextToken() // consume '}'
+
+	return block, nil
+}
+
+func (p *Parser) parseExpression(prec int) (*ast.Node, error) {
+	left, err := p.parsePrimary()
+	if err != nil {
+		return nil, err
+	}
+
+	for prec < p.peekPrecedence() {
+		p.nextToken()
+		left, err = p.parseInfix(left)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return left, nil
+}
+
+func (p *Parser) parsePrimary() (*ast.Node, error) {
+	switch p.curToken.Type {
+	case ast.TokenInt:
+		node := &ast.Node{
+			Kind:  ast.NodeIntLit,
+			Value: p.curToken.Value,
+			Line:  p.curToken.Line,
+			Col:   p.curToken.Col,
+		}
+		return node, nil
+
+	case ast.TokenIdent:
+		node := &ast.Node{
+			Kind:  ast.NodeIdent,
+			Value: p.curToken.Value,
+			Line:  p.curToken.Line,
+			Col:   p.curToken.Col,
+		}
+		return node, nil
+
+	case ast.TokenLParen:
+		p.nextToken()
+		expr, err := p.parseExpression(0)
+		if err != nil {
+			return nil, err
+		}
+		if p.curToken.Type != ast.TokenRParen {
+			return nil, fmt.Errorf("expected ')'")
+		}
+		return expr, nil
+
+	default:
+		return nil, fmt.Errorf("unexpected token: %v", p.curToken.Type)
+	}
+}
+
+func (p *Parser) parseInfix(left *ast.Node) (*ast.Node, error) {
+	node := &ast.Node{
+		Kind: ast.NodeBinaryExpr,
+		Line: p.curToken.Line,
+		Col:  p.curToken.Col,
+		Value: p.curToken.Value,
+		Children: []*ast.Node{left},
+	}
+
+	prec := p.curPrecedence()
+	p.nextToken()
+
+	right, err := p.parseExpression(prec)
+	if err != nil {
+		return nil, err
+	}
+	node.Children = append(node.Children, right)
+
+	// Handle function calls
+	if left.Kind == ast.NodeIdent && p.curToken.Type == ast.TokenLParen {
+		call := &ast.Node{
+			Kind:  ast.NodeCallExpr,
+			Value: left.Value,
+		}
+		p.nextToken() // consume '('
+		for p.curToken.Type != ast.TokenRParen {
+			arg, err := p.parseExpression(0)
+			if err != nil {
+				return nil, err
+			}
+			call.Children = append(call.Children, arg)
+			if p.curToken.Type == ast.TokenComma {
+				p.nextToken()
+			}
+		}
+		p.nextToken() // consume ')'
+		return call, nil
+	}
+
+	return node, nil
+}
+
+func (p *Parser) peekPrecedence() int {
+	return precedence(p.peekToken.Type)
+}
+
+func (p *Parser) curPrecedence() int {
+	return precedence(p.curToken.Type)
+}
+
+func precedence(tok ast.TokenType) int {
+	switch tok {
+	case ast.TokenEq, ast.TokenNe, ast.TokenLt, ast.TokenGt, ast.TokenLe, ast.TokenGe:
+		return 1
+	case ast.TokenPlus, ast.TokenMinus:
+		return 2
+	case ast.TokenStar, ast.TokenSlash:
+		return 3
+	case ast.TokenDotDot:
+		return 4
+	default:
+		return 0
+	}
+}
+
+func (p *Parser) skipSemicolons() {
+	for p.curToken.Type == ast.TokenSemicolon {
+		p.nextToken()
+	}
+}
