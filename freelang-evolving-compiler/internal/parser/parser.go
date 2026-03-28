@@ -355,6 +355,21 @@ func (p *Parser) parsePrimary() (*ast.Node, error) {
 }
 
 func (p *Parser) parseInfix(left *ast.Node) (*ast.Node, error) {
+	// Handle field access: obj.field
+	if p.curToken.Type == ast.TokenDot {
+		p.nextToken() // consume '.'
+		if p.curToken.Type != ast.TokenIdent {
+			return nil, fmt.Errorf("expected field name after '.'")
+		}
+		return &ast.Node{
+			Kind:     ast.NodeFieldAccess,
+			Value:    p.curToken.Value,
+			Line:     p.curToken.Line,
+			Col:      p.curToken.Col,
+			Children: []*ast.Node{left},
+		}, nil
+	}
+
 	node := &ast.Node{
 		Kind:     ast.NodeBinaryExpr,
 		Line:     p.curToken.Line,
@@ -414,6 +429,8 @@ func precedence(tok ast.TokenType) int {
 		return 3
 	case ast.TokenDotDot:
 		return 4
+	case ast.TokenDot:
+		return 5
 	default:
 		return 0
 	}

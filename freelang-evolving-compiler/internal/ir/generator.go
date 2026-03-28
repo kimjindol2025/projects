@@ -348,6 +348,9 @@ func (g *Generator) genExpr(node *ast.Node) (Operand, error) {
 	case ast.NodeCallExpr:
 		return g.genCallExpr(node)
 
+	case ast.NodeFieldAccess:
+		return g.genFieldAccess(node)
+
 	default:
 		return Operand{}, fmt.Errorf("unsupported expression kind: %d", node.Kind)
 	}
@@ -502,4 +505,47 @@ func (g *Generator) genStructDecl(node *ast.Node) error {
 	g.currentFn = prevFn
 
 	return nil
+}
+
+// genFieldAccess generates IR for a field access expression (obj.field)
+func (g *Generator) genFieldAccess(node *ast.Node) (Operand, error) {
+	if len(node.Children) == 0 {
+		return Operand{}, fmt.Errorf("field access requires object expression")
+	}
+
+	// Generate IR for object expression
+	objOp, err := g.genExpr(node.Children[0])
+	if err != nil {
+		return Operand{}, err
+	}
+
+	fieldName := node.Value
+
+	// Search for field offset in known structs
+	var offset int64
+	found := false
+	for _, fields := range g.structFields {
+		for i, f := range fields {
+			if f == fieldName {
+				offset = int64(i * 8)
+				found = true
+				break
+			}
+		}
+		if found {
+			break
+		}
+	}
+	// If not found, use offset 0 as fallback
+
+	// Emit OpFieldLoad instruction
+	result := g.newTemp()
+	g.emit(Instruction{
+		Op:   OpFieldLoad,
+		Dest: result,
+		Src1: objOp,
+		Src2: Operand{IsImm: true, ImmVal: offset},
+	})
+
+	return result, nil
 }
