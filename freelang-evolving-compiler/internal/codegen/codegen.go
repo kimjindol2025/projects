@@ -174,6 +174,21 @@ func (cg *CodeGen) generateInstruction(instr ir.Instruction) {
 	case ir.OpLeave:
 		cg.writeLine(fmt.Sprintf("LEAVE %s", instr.Fn))
 
+	case ir.OpStructDef:
+		cg.writeLine(fmt.Sprintf("; STRUCT %s size=%d", instr.Fn, instr.Src1.ImmVal))
+
+	case ir.OpFieldLoad:
+		cg.writeLine(fmt.Sprintf("  LOAD %s, [%s+%d]",
+			cg.formatOperand(instr.Dest),
+			cg.formatOperand(instr.Src1),
+			instr.Src2.ImmVal))
+
+	case ir.OpFieldStore:
+		cg.writeLine(fmt.Sprintf("  STORE [%s+%d], %s",
+			cg.formatOperand(instr.Dest),
+			instr.Src1.ImmVal,
+			cg.formatOperand(instr.Src2)))
+
 	case ir.OpNoop:
 		// Skip noop instructions
 	}

@@ -8,7 +8,7 @@ import (
 
 func TestParseLetDecl(t *testing.T) {
 	tests := []struct {
-		input  string
+		input   string
 		varName string
 		wantErr bool
 	}{

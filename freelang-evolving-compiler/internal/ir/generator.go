@@ -9,10 +9,11 @@ import (
 
 // Generator converts AST to intermediate representation
 type Generator struct {
-	tempCount  int
-	labelCount int
-	currentFn  *Function
-	program    *Program
+	tempCount    int
+	labelCount   int
+	currentFn    *Function
+	program      *Program
+	structFields map[string][]string
 }
 
 // NewGenerator creates a new IR generator
@@ -24,6 +25,7 @@ func NewGenerator() *Generator {
 			Functions: []Function{},
 			Main:      []Instruction{},
 		},
+		structFields: make(map[string][]string),
 	}
 }
 
@@ -38,6 +40,10 @@ func (g *Generator) Generate(root *ast.Node) (*Program, error) {
 		for _, child := range root.Children {
 			if child.Kind == ast.NodeFnDecl {
 				if err := g.genFnDecl(child); err != nil {
+					return nil, err
+				}
+			} else if child.Kind == ast.NodeStructDecl {
+				if err := g.genStructDecl(child); err != nil {
 					return nil, err
 				}
 			} else {
@@ -124,6 +130,8 @@ func (g *Generator) genStmt(node *ast.Node) error {
 		return g.genForStmt(node)
 	case ast.NodeReturn:
 		return g.genReturn(node)
+	case ast.NodeStructDecl:
+		return g.genStructDecl(node)
 	case ast.NodeBlockStmt:
 		for _, child := range node.Children {
 			if err := g.genStmt(child); err != nil {
@@ -455,4 +463,43 @@ func (g *Generator) opcodeFromOp(op string) Opcode {
 	default:
 		return OpNoop
 	}
+}
+
+// genStructDecl generates IR for a struct declaration
+func (g *Generator) genStructDecl(node *ast.Node) error {
+	if node.Value == "" {
+		return fmt.Errorf("struct declaration must have a name")
+	}
+
+	name := node.Value
+	fields := []string{}
+
+	// Extract field names from children
+	for _, field := range node.Children {
+		if field.Kind == ast.NodeFieldDecl {
+			fields = append(fields, field.Value)
+		}
+	}
+
+	// Store struct definition
+	g.structFields[name] = fields
+
+	// Calculate struct size (8 bytes per field)
+	size := len(fields) * 8
+
+	// Save current function context
+	prevFn := g.currentFn
+	g.currentFn = nil // Emit to Main context
+
+	// Emit OpStructDef instruction
+	g.emit(Instruction{
+		Op:   OpStructDef,
+		Fn:   name,
+		Src1: Operand{IsImm: true, ImmVal: int64(size)},
+	})
+
+	// Restore function context
+	g.currentFn = prevFn
+
+	return nil
 }

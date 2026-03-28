@@ -356,10 +356,10 @@ func (p *Parser) parsePrimary() (*ast.Node, error) {
 
 func (p *Parser) parseInfix(left *ast.Node) (*ast.Node, error) {
 	node := &ast.Node{
-		Kind: ast.NodeBinaryExpr,
-		Line: p.curToken.Line,
-		Col:  p.curToken.Col,
-		Value: p.curToken.Value,
+		Kind:     ast.NodeBinaryExpr,
+		Line:     p.curToken.Line,
+		Col:      p.curToken.Col,
+		Value:    p.curToken.Value,
 		Children: []*ast.Node{left},
 	}
 
