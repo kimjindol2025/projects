@@ -25,8 +25,6 @@ const (
 	TknTrait
 	TknImpl
 	TknReturn
-	TknBreak
-	TknContinue
 	TknModule
 	TknImport
 
@@ -113,8 +111,6 @@ var tokenTypeNames = map[TokenType]string{
 	TknTrait:       "trait",
 	TknImpl:         "impl",
 	TknReturn:      "return",
-	TknBreak:       "break",
-	TknContinue:    "continue",
 	TknModule:      "module",
 	TknImport:      "import",
 	TknTrue:        "true",

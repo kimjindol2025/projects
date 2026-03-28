@@ -54,8 +54,6 @@ func New(input string) (*Lexer, error) {
 		"trait":     TknTrait,
 		"impl":      TknImpl,
 		"return":    TknReturn,
-		"break":     TknBreak,
-		"continue":  TknContinue,
 		"module":    TknModule,
 		"import":    TknImport,
 		"true":      TknTrue,
@@ -302,7 +300,7 @@ func (l *Lexer) nextToken() (Token, error) {
 
 	token.Line = startLine
 	token.Column = startColumn
-	if token.Text == "" && token.Type != TknString {
+	if token.Text == "" {
 		token.Text = string(l.input[startPos:l.pos])
 	}
 

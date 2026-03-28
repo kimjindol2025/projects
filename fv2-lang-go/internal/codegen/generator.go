@@ -17,7 +17,6 @@ type Generator struct {
 	functionStack   []string              // 현재 함수 스택
 	varTypes        map[string]string     // Variable name → FV type (i64, f64, string, etc.)
 	externFuncTypes map[string]string     // Extern function name → return type (i64, f64, etc.)
-	funcReturnTypes map[string]string     // Function name → C return type
 }
 
 // New creates a new code generator
@@ -27,7 +26,6 @@ func New() *Generator {
 		functionStack:   []string{},
 		varTypes:        make(map[string]string),
 		externFuncTypes: make(map[string]string),
-		funcReturnTypes: make(map[string]string),
 	}
 }
 
@@ -39,31 +37,6 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	g.writeLine("#include <string.h>")
 	g.writeLine("#include <stdbool.h>")
 	g.writeLine("#include <ctype.h>")
-	g.writeLine("")
-	// FVX runtime: string helpers
-	g.writeLine("static char* fvx_concat(const char* a, const char* b) {")
-	g.writeLine("  size_t la = strlen(a), lb = strlen(b);")
-	g.writeLine("  char* r = (char*)malloc(la+lb+1);")
-	g.writeLine("  memcpy(r,a,la); memcpy(r+la,b,lb); r[la+lb]=0; return r;")
-	g.writeLine("}")
-	g.writeLine("static char* fvx_substr(const char* s, long long start, long long len) {")
-	g.writeLine("  long long slen = (long long)strlen(s);")
-	g.writeLine("  if(start<0) start=0; if(start>slen) start=slen;")
-	g.writeLine("  if(len<0) len=0; if(start+len>slen) len=slen-start;")
-	g.writeLine("  char* r = (char*)malloc(len+1); memcpy(r,s+start,len); r[len]=0; return r;")
-	g.writeLine("}")
-	g.writeLine("static char* fvx_from_char(long long c) {")
-	g.writeLine("  char* r = (char*)malloc(2); r[0]=(char)c; r[1]=0; return r;")
-	g.writeLine("}")
-	g.writeLine("static char* fvx_int_to_str(long long n) {")
-	g.writeLine("  char buf[32]; snprintf(buf,sizeof(buf),\"%lld\",n); return strdup(buf);")
-	g.writeLine("}")
-	g.writeLine("static char* fvx_read_file(const char* path) {")
-	g.writeLine("  FILE* f=fopen(path,\"r\"); if(!f) return strdup(\"\");")
-	g.writeLine("  fseek(f,0,SEEK_END); long sz=ftell(f); rewind(f);")
-	g.writeLine("  char* buf=(char*)malloc(sz+1); fread(buf,1,sz,f); buf[sz]=0; fclose(f); return buf;")
-	g.writeLine("}")
-	g.writeLine("")
 
 	// Process imports and write additional headers
 	for _, def := range program.Definitions {
@@ -90,17 +63,6 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	}
 	g.writeLine("")
 
-	// Type definitions (structs, etc) — must come before forward declarations
-	for _, def := range program.Definitions {
-		switch d := def.(type) {
-		case *ast.StructDef:
-			g.writeStructDefinition(d)
-		case *ast.TypeDef:
-			g.writeTypeDefinition(d)
-		}
-	}
-	g.writeLine("")
-
 	// Forward declarations for functions (except main) and extern functions
 	for _, def := range program.Definitions {
 		switch d := def.(type) {
@@ -110,6 +72,17 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 			}
 		case *ast.ExternDef:
 			g.writeExternDeclaration(d)
+		}
+	}
+	g.writeLine("")
+
+	// Type definitions (structs, etc)
+	for _, def := range program.Definitions {
+		switch d := def.(type) {
+		case *ast.StructDef:
+			g.writeStructDefinition(d)
+		case *ast.TypeDef:
+			g.writeTypeDefinition(d)
 		}
 	}
 	g.writeLine("")
@@ -128,7 +101,7 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	}
 
 	// Main function (either from definition or generated)
-	g.writeLine("int main(int _fv_argc, char** _fv_argv) {")
+	g.writeLine("int main() {")
 	g.indent++
 
 	if mainFunc != nil {
@@ -155,8 +128,6 @@ func (g *Generator) writeFunctionDeclaration(fn *ast.FunctionDef) {
 	params := g.generateParameterList(fn.Parameters)
 	returnType := g.generateType(fn.ReturnType)
 	g.writeLine(fmt.Sprintf("%s %s(%s);", returnType, fn.Name, params))
-	// Register return type for type inference
-	g.funcReturnTypes[fn.Name] = returnType
 }
 
 // writeExternDeclaration writes extern function declaration
@@ -171,9 +142,9 @@ func (g *Generator) writeExternDeclaration(ext *ast.ExternDef) {
 	}
 }
 
-// writeStructDefinition writes struct definition with typedef
+// writeStructDefinition writes struct definition
 func (g *Generator) writeStructDefinition(str *ast.StructDef) {
-	g.writeLine(fmt.Sprintf("typedef struct %s {", str.Name))
+	g.writeLine(fmt.Sprintf("struct %s {", str.Name))
 	g.indent++
 
 	for _, field := range str.Fields {
@@ -182,7 +153,7 @@ func (g *Generator) writeStructDefinition(str *ast.StructDef) {
 	}
 
 	g.indent--
-	g.writeLine(fmt.Sprintf("} %s;", str.Name))
+	g.writeLine("};")
 }
 
 // writeTypeDefinition writes type alias
@@ -283,55 +254,12 @@ func (g *Generator) generateStatement(stmt ast.Statement) {
 		g.generateMatchStatement(s)
 	case *ast.BlockStatement:
 		g.generateBlockStatement(s)
-	case *ast.AssignStatement:
-		g.generateAssignStatement(s)
-	case *ast.BreakStatement:
-		g.writeLine("break;")
-	case *ast.ContinueStatement:
-		g.writeLine("continue;")
-	case *ast.IndexAssignStatement:
-		g.generateIndexAssignStatement(s)
-	}
-}
-
-func (g *Generator) generateAssignStatement(assign *ast.AssignStatement) {
-	val := g.generateExpression(assign.Value)
-	g.writeLine(fmt.Sprintf("%s = %s;", assign.Name, val))
-}
-
-func (g *Generator) generateIndexAssignStatement(s *ast.IndexAssignStatement) {
-	idx := g.generateExpression(s.Index)
-	val := g.generateExpression(s.Value)
-	// For dynamic arrays, use the _data suffix
-	arrType := g.varTypes[s.Array]
-	if strings.HasPrefix(arrType, "[]") {
-		g.writeLine(fmt.Sprintf("%s_data[%s] = %s;", s.Array, idx, val))
-	} else {
-		g.writeLine(fmt.Sprintf("%s[%s] = %s;", s.Array, idx, val))
 	}
 }
 
 // generateLetStatement generates let binding
 func (g *Generator) generateLetStatement(let *ast.LetStatement) {
-	// Special handling for dynamic array declarations: []i64, []string, etc.
-	if let.Type != nil && let.Type.IsArray {
-		elemTypeName := ""
-		if let.Type.ElementType != nil {
-			elemTypeName = let.Type.ElementType.Name
-		}
-		fvArrayType := "[]" + elemTypeName
-		g.varTypes[let.Name] = fvArrayType
-
-		// Determine C element type
-		elemCType := g.arrayElemCType(elemTypeName)
-
-		// Generate: elemCType name_data[65536]; long long name_len = 0;
-		g.writeLine(fmt.Sprintf("%s %s_data[65536];", elemCType, let.Name))
-		g.writeLine(fmt.Sprintf("long long %s_len = 0;", let.Name))
-		return
-	}
-
-	// Special handling for non-empty array literals
+	// Special handling for array declarations
 	if arr, ok := let.Init.(*ast.ArrayExpression); ok && len(arr.Elements) > 0 {
 		// Infer element type from first element
 		elemCType := g.inferTypeFromExpression(arr.Elements[0])
@@ -363,22 +291,6 @@ func (g *Generator) generateLetStatement(let *ast.LetStatement) {
 
 	initValue := g.generateExpression(let.Init)
 	g.writeLine(fmt.Sprintf("%s %s = %s;", varType, let.Name, initValue))
-}
-
-// arrayElemCType returns the C type for an FV array element type name
-func (g *Generator) arrayElemCType(elemTypeName string) string {
-	switch elemTypeName {
-	case "i64":
-		return "long long"
-	case "f64":
-		return "double"
-	case "string":
-		return "char*"
-	case "bool":
-		return "bool"
-	default:
-		return "long long"
-	}
 }
 
 // generateConstStatement generates const binding
@@ -606,39 +518,11 @@ func (g *Generator) generateBinaryExpression(bin *ast.BinaryExpression) string {
 
 	switch bin.Operator {
 	case "..":
+		// Range operator - not directly used in C expressions
 		return fmt.Sprintf("range(%s, %s)", left, right)
-	case "==":
-		// string comparison: use strcmp
-		if g.isStringExpr(bin.Left) || g.isStringExpr(bin.Right) {
-			return fmt.Sprintf("(strcmp(%s, %s) == 0)", left, right)
-		}
-		return fmt.Sprintf("(%s == %s)", left, right)
-	case "!=":
-		if g.isStringExpr(bin.Left) || g.isStringExpr(bin.Right) {
-			return fmt.Sprintf("(strcmp(%s, %s) != 0)", left, right)
-		}
-		return fmt.Sprintf("(%s != %s)", left, right)
 	default:
 		return fmt.Sprintf("(%s %s %s)", left, bin.Operator, right)
 	}
-}
-
-func (g *Generator) isStringExpr(expr ast.Expression) bool {
-	switch e := expr.(type) {
-	case *ast.StringLiteral:
-		return true
-	case *ast.Identifier:
-		if t, ok := g.varTypes[e.Name]; ok {
-			return t == "string"
-		}
-	case *ast.CallExpression:
-		if fnIdent, ok := e.Function.(*ast.Identifier); ok {
-			if t, ok := g.varTypes[fnIdent.Name+"_ret"]; ok {
-				return t == "string"
-			}
-		}
-	}
-	return false
 }
 
 // generateUnaryExpression generates unary operation
@@ -671,15 +555,6 @@ func (g *Generator) generateCallExpression(call *ast.CallExpression) string {
 			return g.generatePrint(call.Arguments[0])
 		case "len":
 			if len(args) == 1 {
-				// Check if it's a dynamic array variable
-				if len(call.Arguments) == 1 {
-					if ident, ok := call.Arguments[0].(*ast.Identifier); ok {
-						arrType := g.varTypes[ident.Name]
-						if strings.HasPrefix(arrType, "[]") {
-							return fmt.Sprintf("%s_len", ident.Name)
-						}
-					}
-				}
 				return fmt.Sprintf(`(sizeof(%s)/sizeof(*%s))`, args[0], args[0])
 			}
 		case "abs":
@@ -701,45 +576,6 @@ func (g *Generator) generateCallExpression(call *ast.CallExpression) string {
 		case "to_float":
 			if len(args) == 1 {
 				return fmt.Sprintf(`((double)%s)`, args[0])
-			}
-		// ── string 내장 함수 ──
-		case "str_len":
-			if len(args) == 1 {
-				return fmt.Sprintf(`((long long)strlen(%s))`, args[0])
-			}
-		case "str_at":
-			if len(args) == 2 {
-				return fmt.Sprintf(`((long long)(unsigned char)(%s)[%s])`, args[0], args[1])
-			}
-		case "str_eq":
-			if len(args) == 2 {
-				return fmt.Sprintf(`(strcmp(%s,%s)==0)`, args[0], args[1])
-			}
-		case "str_concat":
-			if len(args) == 2 {
-				return fmt.Sprintf(`fvx_concat(%s,%s)`, args[0], args[1])
-			}
-		case "str_sub":
-			if len(args) == 3 {
-				return fmt.Sprintf(`fvx_substr(%s,%s,%s)`, args[0], args[1], args[2])
-			}
-		case "str_from_char":
-			if len(args) == 1 {
-				return fmt.Sprintf(`fvx_from_char(%s)`, args[0])
-			}
-		case "int_to_str":
-			if len(args) == 1 {
-				return fmt.Sprintf(`fvx_int_to_str(%s)`, args[0])
-			}
-		case "read_file":
-			if len(args) == 1 {
-				return fmt.Sprintf(`fvx_read_file(%s)`, args[0])
-			}
-		case "argc":
-			return "((long long)_fv_argc)"
-		case "argv":
-			if len(args) == 1 {
-				return fmt.Sprintf("_fv_argv[%s]", args[0])
 			}
 		}
 	}
@@ -802,17 +638,6 @@ func (g *Generator) inferFVTypeOfExpression(expr ast.Expression) string {
 		}
 	}
 
-	// For index expressions on dynamic arrays, return element type
-	if indexExpr, ok := expr.(*ast.IndexExpression); ok {
-		if ident, ok2 := indexExpr.Object.(*ast.Identifier); ok2 {
-			if arrType, exists := g.varTypes[ident.Name]; exists {
-				if strings.HasPrefix(arrType, "[]") {
-					return arrType[2:] // strip "[]" prefix to get element type
-				}
-			}
-		}
-	}
-
 	// Otherwise, infer from the expression itself
 	return g.inferFVTypeFromExpression(expr)
 }
@@ -843,13 +668,6 @@ func (g *Generator) generateFieldExpression(field *ast.FieldExpression) string {
 func (g *Generator) generateIndexExpression(index *ast.IndexExpression) string {
 	obj := g.generateExpression(index.Object)
 	idx := g.generateExpression(index.Index)
-	// For dynamic arrays, index the _data buffer
-	if ident, ok := index.Object.(*ast.Identifier); ok {
-		arrType := g.varTypes[ident.Name]
-		if strings.HasPrefix(arrType, "[]") {
-			return fmt.Sprintf("%s_data[%s]", obj, idx)
-		}
-	}
 	return fmt.Sprintf("%s[%s]", obj, idx)
 }
 
@@ -869,23 +687,6 @@ func (g *Generator) generateIfExpression(ifExpr *ast.IfExpression) string {
 // generateMethodCallExpression generates method call
 func (g *Generator) generateMethodCallExpression(methodCall *ast.MethodCallExpression) string {
 	obj := g.generateExpression(methodCall.Object)
-
-	// Handle array methods on dynamic arrays
-	if ident, ok := methodCall.Object.(*ast.Identifier); ok {
-		arrType := g.varTypes[ident.Name]
-		if strings.HasPrefix(arrType, "[]") {
-			switch methodCall.Method {
-			case "push":
-				if len(methodCall.Arguments) == 1 {
-					val := g.generateExpression(methodCall.Arguments[0])
-					return fmt.Sprintf("%s_data[%s_len++] = %s", obj, obj, val)
-				}
-			case "pop":
-				return fmt.Sprintf("%s_len--", obj)
-			}
-		}
-	}
-
 	var args []string
 	for _, arg := range methodCall.Arguments {
 		args = append(args, g.generateExpression(arg))
@@ -939,25 +740,11 @@ func (g *Generator) inferTypeFromExpression(expr ast.Expression) string {
 			return fmt.Sprintf("%s*", elemType)
 		}
 		return "void*"
-	case *ast.StructExpression:
-		return e.Name // struct type name
 	case *ast.CallExpression:
+		// Check if it's an extern function call
 		if ident, ok := e.Function.(*ast.Identifier); ok {
-			// Builtin string functions
-			switch ident.Name {
-			case "str_concat", "str_sub", "str_from_char", "int_to_str", "read_file":
-				return "char*"
-			case "str_eq":
-				return "bool"
-			case "str_len", "str_at", "len", "abs", "min", "max", "to_int", "argc":
-				return "long long"
-			case "to_float":
-				return "double"
-			case "argv":
-				return "char*"
-			}
-			// Check extern func return types
 			if retType, exists := g.externFuncTypes[ident.Name]; exists {
+				// Return C type based on FV return type
 				if retType == "f64" {
 					return "double"
 				} else if retType == "i64" {
@@ -967,11 +754,6 @@ func (g *Generator) inferTypeFromExpression(expr ast.Expression) string {
 				} else if retType == "bool" {
 					return "bool"
 				}
-				return retType
-			}
-			// Check registered function return types
-			if retType, exists := g.funcReturnTypes[ident.Name]; exists {
-				return retType
 			}
 		}
 		return "long long" // Default for regular function calls
@@ -1011,19 +793,6 @@ func (g *Generator) inferFVTypeFromExpression(expr ast.Expression) string {
 	case *ast.CallExpression:
 		// Check if it's an extern function call
 		if ident, ok := e.Function.(*ast.Identifier); ok {
-			// Builtin string functions
-			switch ident.Name {
-			case "str_concat", "str_sub", "str_from_char", "int_to_str", "read_file":
-				return "string"
-			case "str_eq":
-				return "bool"
-			case "str_len", "str_at", "len", "abs", "min", "max", "to_int", "argc":
-				return "i64"
-			case "to_float":
-				return "f64"
-			case "argv":
-				return "string"
-			}
 			if retType, exists := g.externFuncTypes[ident.Name]; exists {
 				return retType // Return the extern function's return type
 			}

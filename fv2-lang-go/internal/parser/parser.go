@@ -297,49 +297,8 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 	if p.match(lexer.TknReturn) {
 		return p.parseReturnStatement()
 	}
-	if p.match(lexer.TknBreak) {
-		p.match(lexer.TknSemicolon)
-		return &ast.BreakStatement{}, nil
-	}
-	if p.match(lexer.TknContinue) {
-		p.match(lexer.TknSemicolon)
-		return &ast.ContinueStatement{}, nil
-	}
 	if p.match(lexer.TknLBrace) {
 		return p.parseBlockStatement()
-	}
-
-	// Assignment statement: ident = expr  or  ident[index] = expr
-	if p.check(lexer.TknIdentifier) {
-		savedPos := p.pos
-		name := p.current().Text
-		p.advance()
-		// ident[index] = expr  → IndexAssignStatement
-		if p.match(lexer.TknLBracket) {
-			idx, err := p.parseExpression()
-			if err != nil {
-				p.pos = savedPos
-			} else if p.match(lexer.TknRBracket) && p.match(lexer.TknAssign) {
-				val, err := p.parseExpression()
-				if err != nil {
-					return nil, err
-				}
-				p.match(lexer.TknSemicolon)
-				return &ast.IndexAssignStatement{Array: name, Index: idx, Value: val}, nil
-			} else {
-				p.pos = savedPos
-			}
-		} else if p.match(lexer.TknAssign) {
-			val, err := p.parseExpression()
-			if err != nil {
-				return nil, err
-			}
-			p.match(lexer.TknSemicolon)
-			return &ast.AssignStatement{Name: name, Value: val}, nil
-		} else {
-			// Not assignment, backtrack
-			p.pos = savedPos
-		}
 	}
 
 	// Expression statement
@@ -848,39 +807,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 	}
 
 	if p.match(lexer.TknIdentifier) {
-		name := p.previous().Text
-		// struct literal: Name{field: value, ...}
-		if p.check(lexer.TknLBrace) {
-			// lookahead: check if next-next is identifier followed by colon
-			if next := p.peekAhead(1); next != nil && next.Type == lexer.TknIdentifier {
-				if colon := p.peekAhead(2); colon != nil && colon.Type == lexer.TknColon {
-					p.advance() // consume '{'
-					fields := make(map[string]ast.Expression)
-					for !p.check(lexer.TknRBrace) && !p.isAtEnd() {
-						fieldName := p.current().Text
-						if !p.match(lexer.TknIdentifier) {
-							return nil, fmt.Errorf("expected field name at %d:%d", p.current().Line, p.current().Column)
-						}
-						if !p.match(lexer.TknColon) {
-							return nil, fmt.Errorf("expected ':' after field name at %d:%d", p.current().Line, p.current().Column)
-						}
-						val, err := p.parseExpression()
-						if err != nil {
-							return nil, err
-						}
-						fields[fieldName] = val
-						if !p.match(lexer.TknComma) {
-							break
-						}
-					}
-					if !p.match(lexer.TknRBrace) {
-						return nil, fmt.Errorf("expected '}' at %d:%d", p.current().Line, p.current().Column)
-					}
-					return &ast.StructExpression{Name: name, Fields: fields}, nil
-				}
-			}
-		}
-		return &ast.Identifier{Name: name}, nil
+		return &ast.Identifier{Name: p.previous().Text}, nil
 	}
 
 	if p.match(lexer.TknLBracket) {
@@ -992,23 +919,6 @@ func (p *Parser) parseType() *ast.Type {
 	// Handle option types (?)
 	isOption := p.match(lexer.TknQuestion)
 
-	// Handle array types (prefix [] like []i64, []string)
-	if p.check(lexer.TknLBracket) {
-		savedPos := p.pos
-		p.advance() // consume '['
-		if p.match(lexer.TknRBracket) {
-			// It's an array type: parse element type
-			elemType := p.parseType()
-			return &ast.Type{
-				IsArray:     true,
-				IsOption:    isOption,
-				ElementType: elemType,
-			}
-		}
-		// Not an array type, backtrack
-		p.pos = savedPos
-	}
-
 	// Get base type
 	var typeName string
 	if p.match(lexer.TknIdentifier) {
@@ -1017,10 +927,21 @@ func (p *Parser) parseType() *ast.Type {
 		typeName = "unknown"
 	}
 
+	// Handle array types (prefix [])
+	isArray := false
+	if p.check(lexer.TknLBracket) {
+		p.advance()
+		if p.match(lexer.TknRBracket) {
+			isArray = true
+		} else {
+			p.pos-- // backtrack
+		}
+	}
+
 	return &ast.Type{
-		Name:        typeName,
-		IsOption:    isOption,
-		IsArray:     false,
+		Name:       typeName,
+		IsOption:   isOption,
+		IsArray:    isArray,
 		IsPrimitive: isPrimitiveType(typeName),
 	}
 }

@@ -27,6 +27,9 @@ const (
 	OpReturn
 	OpEnter
 	OpLeave
+	OpStructDef
+	OpFieldLoad
+	OpFieldStore
 )
 
 // Operand represents a value in an instruction (register, immediate, or label)

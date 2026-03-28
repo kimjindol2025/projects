@@ -34,7 +34,7 @@ func TestBasicCGeneration(t *testing.T) {
 		t.Errorf("missing stdio.h include")
 	}
 
-	if !strings.Contains(code, "int main(int _fv_argc, char** _fv_argv)") {
+	if !strings.Contains(code, "int main()") {
 		t.Errorf("missing main function")
 	}
 }
@@ -390,7 +390,7 @@ func TestComplexProgram(t *testing.T) {
 		t.Errorf("function not generated")
 	}
 
-	if !strings.Contains(code, "int main(int _fv_argc, char** _fv_argv)") {
+	if !strings.Contains(code, "int main()") {
 		t.Errorf("main not generated")
 	}
 

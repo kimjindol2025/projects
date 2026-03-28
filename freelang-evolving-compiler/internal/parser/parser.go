@@ -61,6 +61,8 @@ func (p *Parser) parseStatement() (*ast.Node, error) {
 		return p.parseForStmt()
 	case ast.TokenReturn:
 		return p.parseReturnStmt()
+	case ast.TokenStruct:
+		return p.parseStructDecl()
 	case ast.TokenLBrace:
 		return p.parseBlockStmt()
 	case ast.TokenSemicolon:
@@ -421,4 +423,81 @@ func (p *Parser) skipSemicolons() {
 	for p.curToken.Type == ast.TokenSemicolon {
 		p.nextToken()
 	}
+}
+
+func (p *Parser) parseStructDecl() (*ast.Node, error) {
+	structNode := &ast.Node{
+		Kind: ast.NodeStructDecl,
+		Line: p.curToken.Line,
+		Col:  p.curToken.Col,
+	}
+
+	p.nextToken() // consume 'struct'
+
+	if p.curToken.Type != ast.TokenIdent {
+		return nil, fmt.Errorf("expected struct name")
+	}
+
+	structNode.Value = p.curToken.Value
+	p.nextToken()
+
+	if p.curToken.Type != ast.TokenLBrace {
+		return nil, fmt.Errorf("expected '{' after struct name")
+	}
+
+	p.nextToken() // consume '{'
+
+	// Parse fields
+	for p.curToken.Type != ast.TokenRBrace {
+		field, err := p.parseFieldDecl()
+		if err != nil {
+			return nil, err
+		}
+		structNode.Children = append(structNode.Children, field)
+
+		if p.curToken.Type == ast.TokenSemicolon {
+			p.nextToken()
+		}
+	}
+
+	p.nextToken() // consume '}'
+
+	return structNode, nil
+}
+
+func (p *Parser) parseFieldDecl() (*ast.Node, error) {
+	if p.curToken.Type != ast.TokenIdent {
+		return nil, fmt.Errorf("expected field name")
+	}
+
+	fieldNode := &ast.Node{
+		Kind:  ast.NodeFieldDecl,
+		Value: p.curToken.Value,
+		Line:  p.curToken.Line,
+		Col:   p.curToken.Col,
+	}
+
+	p.nextToken() // consume field name
+
+	if p.curToken.Type != ast.TokenColon {
+		return nil, fmt.Errorf("expected ':' after field name")
+	}
+
+	p.nextToken() // consume ':'
+
+	if p.curToken.Type != ast.TokenIdent {
+		return nil, fmt.Errorf("expected field type")
+	}
+
+	typeNode := &ast.Node{
+		Kind:  ast.NodeIdent,
+		Value: p.curToken.Value,
+		Line:  p.curToken.Line,
+		Col:   p.curToken.Col,
+	}
+	fieldNode.Children = append(fieldNode.Children, typeNode)
+
+	p.nextToken() // consume type
+
+	return fieldNode, nil
 }

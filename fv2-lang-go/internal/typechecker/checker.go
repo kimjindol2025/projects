@@ -63,27 +63,6 @@ func New() *Checker {
 		IsVariadic: true,
 	}, "function")
 
-	// String builtin functions
-	for _, name := range []string{
-		"str_len", "str_at", "str_eq", "str_concat",
-		"str_sub", "str_from_char", "int_to_str", "read_file",
-	} {
-		globalScope.Define(name, &BuiltinFunctionType{
-			Name:       name,
-			IsVariadic: false,
-		}, "function")
-	}
-
-	// Command-line argument functions
-	globalScope.Define("argc", &BuiltinFunctionType{
-		Name:       "argc",
-		IsVariadic: false,
-	}, "function")
-	globalScope.Define("argv", &BuiltinFunctionType{
-		Name:       "argv",
-		IsVariadic: false,
-	}, "function")
-
 	return &Checker{
 		GlobalScope: globalScope,
 		CurrentScope: globalScope,
@@ -231,15 +210,6 @@ func (c *Checker) checkStatement(stmt ast.Statement) {
 		c.checkExpression(s.Expression)
 	case *ast.BlockStatement:
 		c.checkBlockStatement(s)
-	case *ast.AssignStatement:
-		c.checkExpression(s.Value)
-	case *ast.BreakStatement:
-		// valid in loop context - no type check needed
-	case *ast.ContinueStatement:
-		// valid in loop context - no type check needed
-	case *ast.IndexAssignStatement:
-		c.checkExpression(s.Index)
-		c.checkExpression(s.Value)
 	}
 }
 
@@ -250,24 +220,12 @@ func (c *Checker) checkLetStatement(let *ast.LetStatement) {
 	if let.Type != nil {
 		declaredType = c.astTypeToCheckerType(let.Type)
 
-		// Skip type mismatch check for array declarations with empty literal []
-		// (the declared type from annotation takes precedence)
-		isArrayDecl := let.Type != nil && let.Type.IsArray
-		isEmptyArray := false
-		if at, ok := initType.(*ArrayType); ok {
-			if pt, ok2 := at.ElementType.(*PrimitiveType); ok2 {
-				isEmptyArray = pt.Name == "unknown"
-			}
-		}
-
-		if !isArrayDecl || !isEmptyArray {
-			// Verify init matches declared type
-			if !initType.Equal(declaredType) {
-				c.addError(0, 0, fmt.Sprintf(
-					"let %s: expected type %s, got %s",
-					let.Name, declaredType.TypeString(), initType.TypeString(),
-				))
-			}
+		// Verify init matches declared type
+		if !initType.Equal(declaredType) {
+			c.addError(0, 0, fmt.Sprintf(
+				"let %s: expected type %s, got %s",
+				let.Name, declaredType.TypeString(), initType.TypeString(),
+			))
 		}
 	} else {
 		declaredType = initType
@@ -425,24 +383,8 @@ func (c *Checker) checkExpression(expr ast.Expression) Type {
 		return c.checkIfExpression(e)
 	case *ast.MatchExpression:
 		return c.checkMatchExpression(e)
-	case *ast.StructExpression:
-		return c.checkStructExpression(e)
-	case *ast.MethodCallExpression:
-		return c.checkMethodCallExpression(e)
 	}
 	return &PrimitiveType{Name: "none"}
-}
-
-func (c *Checker) checkStructExpression(structExpr *ast.StructExpression) Type {
-	sym := c.CurrentScope.Lookup(structExpr.Name)
-	if sym != nil {
-		return sym.Type
-	}
-	return &StructType{Name: structExpr.Name, Fields: make(map[string]Type)}
-}
-
-func (c *Checker) checkMethodCallExpression(methodCall *ast.MethodCallExpression) Type {
-	return &PrimitiveType{Name: "unknown"}
 }
 
 func (c *Checker) checkIdentifier(ident *ast.Identifier) Type {
@@ -549,23 +491,15 @@ func (c *Checker) checkCallExpression(call *ast.CallExpression) Type {
 
 	// Handle built-in functions
 	if bt, ok := fnType.(*BuiltinFunctionType); ok {
-		// Check all arguments are valid expressions
-		for _, arg := range call.Arguments {
-			c.checkExpression(arg)
-		}
-		// Return type based on builtin name
-		switch bt.Name {
-		case "str_eq":
-			return &PrimitiveType{Name: "bool"}
-		case "str_len", "str_at", "len", "abs", "min", "max", "to_int", "argc":
-			return &PrimitiveType{Name: "i64"}
-		case "to_float":
-			return &PrimitiveType{Name: "f64"}
-		case "str_concat", "str_sub", "str_from_char", "int_to_str", "read_file", "argv":
-			return &PrimitiveType{Name: "string"}
-		default:
+		// Built-in functions like println, print accept any arguments
+		if bt.IsVariadic {
+			// Just check that arguments are valid expressions
+			for _, arg := range call.Arguments {
+				c.checkExpression(arg)
+			}
 			return &PrimitiveType{Name: "none"}
 		}
+		return &PrimitiveType{Name: "none"}
 	}
 
 	c.addError(0, 0, "cannot call non-function")
@@ -682,14 +616,6 @@ func (c *Checker) astTypeToCheckerType(t *ast.Type) Type {
 
 	if t.IsArray {
 		return &ArrayType{ElementType: c.astTypeToCheckerType(t.ElementType)}
-	}
-
-	// Check if this is a registered struct type
-	sym := c.CurrentScope.Lookup(t.Name)
-	if sym != nil {
-		if st, ok := sym.Type.(*StructType); ok {
-			return st
-		}
 	}
 
 	return &PrimitiveType{Name: t.Name}

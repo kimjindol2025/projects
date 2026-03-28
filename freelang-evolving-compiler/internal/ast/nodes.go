@@ -16,6 +16,9 @@ const (
 	NodeReturn         // return expr
 	NodeBlockStmt      // { statements }
 	NodeRangeExpr      // 0..10
+	NodeStructDecl     // struct Name { fields }
+	NodeFieldDecl      // fieldName: Type
+	NodeFieldAccess    // expr.field
 )
 
 // Node represents a single AST node
@@ -60,6 +63,7 @@ const (
 	TokenFor
 	TokenIn
 	TokenReturn
+	TokenStruct
 )
 
 // Token represents a lexical token

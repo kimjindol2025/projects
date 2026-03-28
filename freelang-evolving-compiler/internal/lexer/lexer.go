@@ -230,6 +230,8 @@ func lookupKeyword(ident string) ast.TokenType {
 		return ast.TokenIn
 	case "return":
 		return ast.TokenReturn
+	case "struct":
+		return ast.TokenStruct
 	default:
 		return ast.TokenIdent
 	}
