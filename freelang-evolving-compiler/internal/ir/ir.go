@@ -30,6 +30,7 @@ const (
 	OpStructDef
 	OpFieldLoad
 	OpFieldStore
+	OpSyscall
 )
 
 // Operand represents a value in an instruction (register, immediate, or label)
@@ -39,6 +40,10 @@ type Operand struct {
 	IsImm   bool   // true if this is an immediate integer
 	ImmVal  int64  // immediate value
 	IsLabel bool   // true if this is a label reference
+	IsStr   bool   // true if this is an immediate string
+	SVal    string // string value
+	IsBool  bool   // true if this is an immediate bool
+	BVal    bool   // bool value
 }
 
 // Instruction is a three-address code instruction

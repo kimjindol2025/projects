@@ -59,6 +59,25 @@ func NewTypeEnv() *TypeEnv {
 	}
 }
 
+// RegisterBuiltins registers all built-in function signatures
+// Call this after TypeEnv creation to avoid circular imports
+func (e *TypeEnv) RegisterBuiltins(defs []BuiltinSignature) {
+	for _, def := range defs {
+		e.RegisterFunc(def.Name, FuncDef{
+			Name:       def.Name,
+			ParamTypes: def.ParamTypes,
+			ReturnType: def.ReturnType,
+		})
+	}
+}
+
+// BuiltinSignature represents a built-in function signature
+type BuiltinSignature struct {
+	Name       string
+	ParamTypes []TypeInfo
+	ReturnType TypeInfo
+}
+
 // EnterScope creates a new nested scope
 func (e *TypeEnv) EnterScope() {
 	e.current = newScope(e.current)

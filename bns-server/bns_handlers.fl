@@ -1,0 +1,143 @@
+// ============================================================================
+// BNS API 핸들러 - 4개 엔드포인트 구현
+// ============================================================================
+// /api/status, /api/gogs, /api/feed, /api/db
+
+module bns_handlers {
+    use bns_models;
+    use bns_http;
+    use bns_broadcast;
+    use bns_dynamic;
+
+    // === 라우터 ===
+    func handle_request(req: bns_http.HttpRequest) -> bns_models.HttpResponse {
+        // 경로별 라우팅
+        if req.path == "/api/status" {
+            return handle_status();
+        } else if req.path == "/api/gogs" {
+            return handle_gogs();
+        } else if req.path == "/api/feed" {
+            return handle_feed();
+        } else if req.path == "/api/db" {
+            return handle_db();
+        } else if req.path == "/" {
+            return handle_root();
+        } else {
+            return bns_models.http_response_error(404, "Endpoint not found");
+        }
+    }
+
+    // === /api/status - 프로젝트 상태 (동적 데이터) ===
+    func handle_status() -> bns_models.HttpResponse {
+        // MEMORY.md에서 동적으로 데이터 로드
+        let json = bns_dynamic.get_status_json();
+        return bns_models.http_response_ok(json, bns_models.CONTENT_JSON);
+    }
+
+    // === /api/gogs - 최근 커밋 (동적 데이터) ===
+    func handle_gogs() -> bns_models.HttpResponse {
+        // Git log에서 동적으로 커밋 데이터 로드
+        let json = bns_dynamic.get_gogs_json();
+        return bns_models.http_response_ok(json, bns_models.CONTENT_JSON);
+    }
+
+    // === /api/feed - Server-Sent Events (실시간 스트림) ===
+    func handle_feed() -> bns_models.HttpResponse {
+        // 브로드캐스트에 구독자 등록
+        let (sub_ch, sub_id) = bns_broadcast.broadcast_subscribe();
+
+        if sub_id < 0 {
+            // 구독자 수 초과
+            return bns_models.http_response_error(503, "Too many subscribers");
+        }
+
+        // 채널에서 이벤트 수신 시도 (100 tick 폴링)
+        let i = 0;
+        for i = 0; i < 100; i = i + 1 {
+            let (idx, ok) = sub_ch.chan_recv();
+
+            if ok {
+                let event_json = bns_broadcast.broadcast_get_event(idx);
+                bns_broadcast.broadcast_unsubscribe(sub_id);
+                return bns_models.http_response_sse(event_json);
+            }
+        }
+
+        // 타임아웃: 최신 이벤트 또는 더미 데이터 반환
+        bns_broadcast.broadcast_unsubscribe(sub_id);
+
+        let latest = bns_broadcast.broadcast_get_latest();
+        if len(latest) == 2 {  // "{}" 빈 이벤트
+            // 아직 이벤트 없음 - 더미 반환
+            latest = "{\"status\": \"waiting\", \"message\": \"No events yet\"}";
+        }
+
+        return bns_models.http_response_sse(latest);
+    }
+
+    // === /api/db - Zero-Copy-DB 상태 ===
+    func handle_db() -> bns_models.HttpResponse {
+        let json = "{";
+        json = json + "\"name\": \"Zero-Copy-DB\",";
+        json = json + "\"phase\": 11,";
+        json = json + "\"modules\": 11,";
+        json = json + "\"total_lines\": 22439,";
+        json = json + "\"memory_usage_mb\": 8.5,";
+        json = json + "\"active_transactions\": 3,";
+        json = json + "\"cached_queries\": 12,";
+        json = json + "\"performance\": {";
+        json = json + "\"query_latency_ms\": 2.5,";
+        json = json + "\"insert_throughput_per_sec\": 5000,";
+        json = json + "\"index_hit_rate\": 0.94";
+        json = json + "}";
+        json = json + "}";
+
+        return bns_models.http_response_ok(json, bns_models.CONTENT_JSON);
+    }
+
+    // === / - 루트 (홈페이지) ===
+    func handle_root() -> bns_models.HttpResponse {
+        let html = "<html><body>";
+        html = html + "<h1>🚀 Bigwash Native Shell (BNS)</h1>";
+        html = html + "<p>기록이 증명이다</p>";
+        html = html + "<ul>";
+        html = html + "<li><a href='/api/status'>/api/status</a> - 프로젝트 상태</li>";
+        html = html + "<li><a href='/api/gogs'>/api/gogs</a> - Gogs 커밋</li>";
+        html = html + "<li><a href='/api/feed'>/api/feed</a> - 실시간 피드 (SSE)</li>";
+        html = html + "<li><a href='/api/db'>/api/db</a> - DB 상태</li>";
+        html = html + "</ul>";
+        html = html + "</body></html>";
+
+        return bns_models.http_response_ok(html, "text/html");
+    }
+
+    // === 헬퍼: 정수를 문자열로 ===
+    @inline
+    func to_string(n: i32) -> string {
+        if n == 0 {
+            return "0";
+        }
+
+        let negative = false;
+        if n < 0 {
+            negative = true;
+            n = 0 - n;
+        }
+
+        let result = "";
+        let temp = n;
+
+        for temp > 0 {
+            let digit = temp % 10;
+            let ch = char_from_code(48 + digit);  // '0' = 48
+            result = ch + result;
+            temp = temp / 10;
+        }
+
+        if negative {
+            result = "-" + result;
+        }
+
+        return result;
+    }
+}

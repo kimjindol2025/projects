@@ -509,13 +509,14 @@ const server = http.createServer((req, res) => {
 loadPosts();
 loadComments();
 
-server.listen(PORT, () => {
-  console.log(`✅ Server listening on http://localhost:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server listening on http://0.0.0.0:${PORT} (모든 인터페이스)`);
   console.log(`   Home:     http://localhost:${PORT}/`);
   console.log(`   API:      http://localhost:${PORT}/api/posts`);
   console.log(`   Health:   http://localhost:${PORT}/health`);
   console.log(`   Comments: http://localhost:${PORT}/api/comments`);
   console.log(`   Search:   http://localhost:${PORT}/api/search?q=keyword`);
+  console.log(`   🌐 외부: https://freelang-blog.dclub.kr`);
 });
 
 process.on('SIGINT', () => {

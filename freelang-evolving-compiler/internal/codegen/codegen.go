@@ -189,6 +189,9 @@ func (cg *CodeGen) generateInstruction(instr ir.Instruction) {
 			instr.Src1.ImmVal,
 			cg.formatOperand(instr.Src2)))
 
+	case ir.OpSyscall:
+		cg.writeLine(fmt.Sprintf("  SVC %s", cg.formatOperand(instr.Dest)))
+
 	case ir.OpNoop:
 		// Skip noop instructions
 	}

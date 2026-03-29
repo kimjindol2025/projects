@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/user/freelang-evolving-compiler/internal/ast"
+	"github.com/user/freelang-evolving-compiler/internal/builtin"
 )
 
 // TypeError represents a type checking error
@@ -22,8 +23,10 @@ type TypeChecker struct {
 
 // NewTypeChecker creates a new type checker in soft mode
 func NewTypeChecker() *TypeChecker {
+	env := NewTypeEnv()
+	registerBuiltinsInEnv(env)
 	return &TypeChecker{
-		env:      NewTypeEnv(),
+		env:      env,
 		errors:   []TypeError{},
 		hardMode: false,
 	}
@@ -31,10 +34,30 @@ func NewTypeChecker() *TypeChecker {
 
 // NewTypeCheckerHard creates a new type checker in hard mode
 func NewTypeCheckerHard() *TypeChecker {
+	env := NewTypeEnv()
+	registerBuiltinsInEnv(env)
 	return &TypeChecker{
-		env:      NewTypeEnv(),
+		env:      env,
 		errors:   []TypeError{},
 		hardMode: true,
+	}
+}
+
+// registerBuiltinsInEnv registers all built-in function signatures in the environment
+func registerBuiltinsInEnv(env *TypeEnv) {
+	for _, def := range builtin.AllDefs() {
+		// Convert type names to TypeInfo
+		paramTypes := make([]TypeInfo, len(def.ParamTypeNames))
+		for i, typeName := range def.ParamTypeNames {
+			paramTypes[i] = TypeFromAnnotation(typeName)
+		}
+		returnType := TypeFromAnnotation(def.ReturnTypeName)
+
+		env.RegisterFunc(def.Name, FuncDef{
+			Name:       def.Name,
+			ParamTypes: paramTypes,
+			ReturnType: returnType,
+		})
 	}
 }
 
@@ -331,7 +354,7 @@ func (tc *TypeChecker) checkFieldAccess(n *ast.Node) TypeInfo {
 func (tc *TypeChecker) checkCallExpr(n *ast.Node) TypeInfo {
 	fnName := n.Value
 
-	// Check for user-defined function
+	// Check for user-defined or built-in function
 	if fnDef, found := tc.env.LookupFunc(fnName); found {
 		// Validate argument count
 		if len(n.Children) != len(fnDef.ParamTypes) {
@@ -344,18 +367,9 @@ func (tc *TypeChecker) checkCallExpr(n *ast.Node) TypeInfo {
 		return fnDef.ReturnType
 	}
 
-	// Check for built-in functions
-	switch fnName {
-	case "print":
-		return UnitType
-	case "len":
-		return IntType
-	case "str":
-		return StringType
-	default:
-		tc.addError(fmt.Sprintf("unknown function '%s'", fnName), n.Line, n.Col)
-		return UnknownType
-	}
+	// Unknown function
+	tc.addError(fmt.Sprintf("unknown function '%s'", fnName), n.Line, n.Col)
+	return UnknownType
 }
 
 // inferType infers the type of a node without modifying the environment

@@ -1,0 +1,118 @@
+// ============================================================================
+// BNS (Bigwash Native Shell) - 데이터 모델
+// ============================================================================
+// HTTP 요청/응답, API 데이터 구조 정의
+
+module bns_models {
+    // === HTTP 요청 ===
+    struct HttpRequest {
+        method:      string;     // "GET", "POST", "SSE"
+        path:        string;     // "/api/status", "/api/gogs", ...
+        query:       string;     // "?repo=zero-copy-db"
+        body:        string;     // POST 바디
+        headers:     [string];   // 헤더 배열
+    }
+
+    // === HTTP 응답 ===
+    struct HttpResponse {
+        status_code: i32;        // 200, 404, 500
+        content_type: string;    // "application/json", "text/event-stream"
+        body:        string;     // 응답 바디
+        is_sse:      bool;       // true면 Server-Sent Events
+    }
+
+    // === Project 상태 ===
+    struct ProjectStatus {
+        name:        string;     // "Zero-Copy-DB"
+        phase:       i32;        // 11
+        lines:       i32;        // 22439
+        files:       i32;        // 56
+        tests:       i32;        // 182
+        status:      string;     // "✅ COMPLETE"
+    }
+
+    // === Gogs 커밋 정보 ===
+    struct GogsCommit {
+        hash:        string;     // "2bc0873"
+        message:     string;     // "perf: 성능 최적화"
+        repo:        string;     // "zero-copy-db"
+        date:        string;     // "2026-03-29"
+        files_changed: i32;      // 2
+        insertions:  i32;        // 89
+        deletions:   i32;        // 45
+    }
+
+    // === SSE 이벤트 ===
+    struct SseEvent {
+        event_type:  string;     // "commit", "test", "build"
+        data:        string;     // JSON 문자열
+        timestamp:   i64;        // Unix timestamp
+    }
+
+    // === 시스템 실행 결과 (Git Log, 외부 커맨드) ===
+    struct SysExecResult {
+        output:      string;     // 커맨드 출력
+        success:     bool;       // 성공 여부
+        exit_code:   i32;        // 종료 코드 (0=성공)
+    }
+
+    // === API 응답 - Status ===
+    struct ApiStatusResponse {
+        last_update: string;
+        projects:    [ProjectStatus];
+        total_lines: i32;
+        total_tests: i32;
+    }
+
+    // === API 응답 - Gogs ===
+    struct ApiGogsResponse {
+        recent_commits: [GogsCommit];
+        repo_count:     i32;
+        total_commits:  i32;
+    }
+
+    // === 에러 응답 ===
+    struct ApiError {
+        error:       string;
+        message:     string;
+        code:        i32;
+    }
+
+    // === 상수 ===
+    const HTTP_OK:              i32 = 200;
+    const HTTP_BAD_REQUEST:     i32 = 400;
+    const HTTP_NOT_FOUND:       i32 = 404;
+    const HTTP_INTERNAL_ERROR:  i32 = 500;
+
+    const CONTENT_JSON:         string = "application/json; charset=utf-8";
+    const CONTENT_SSE:          string = "text/event-stream";
+    const CONTENT_TEXT:         string = "text/plain";
+
+    // === 헬퍼 함수 ===
+    func http_response_ok(body: string, content_type: string) -> HttpResponse {
+        let resp: HttpResponse;
+        resp.status_code = HTTP_OK;
+        resp.body = body;
+        resp.content_type = content_type;
+        resp.is_sse = false;
+        return resp;
+    }
+
+    func http_response_error(code: i32, message: string) -> HttpResponse {
+        let resp: HttpResponse;
+        resp.status_code = code;
+        resp.body = "{\"error\": \"" + message + "\"}";
+        resp.content_type = CONTENT_JSON;
+        resp.is_sse = false;
+        return resp;
+    }
+
+    func http_response_sse(data: string) -> HttpResponse {
+        let resp: HttpResponse;
+        resp.status_code = HTTP_OK;
+        resp.body = "data: " + data + "\n\n";
+        resp.content_type = CONTENT_SSE;
+        resp.is_sse = true;
+        return resp;
+    }
+}

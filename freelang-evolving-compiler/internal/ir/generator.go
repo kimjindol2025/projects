@@ -339,6 +339,14 @@ func (g *Generator) genExpr(node *ast.Node) (Operand, error) {
 		fmt.Sscanf(node.Value, "%d", &val)
 		return Operand{IsImm: true, ImmVal: val}, nil
 
+	case ast.NodeStringLit:
+		// String literal
+		return Operand{IsStr: true, SVal: node.Value}, nil
+
+	case ast.NodeBoolLit:
+		// Boolean literal
+		return Operand{IsBool: true, BVal: node.Value == "true"}, nil
+
 	case ast.NodeIdent:
 		return Operand{Name: node.Value}, nil
 
@@ -393,7 +401,42 @@ func (g *Generator) genCallExpr(node *ast.Node) (Operand, error) {
 
 	fnName := node.Children[0].Value
 
-	// Emit parameters
+	// Special handling for syscall
+	if fnName == "syscall" {
+		if len(node.Children) < 2 {
+			return Operand{}, fmt.Errorf("syscall requires at least syscall number")
+		}
+
+		// syscall number (always first arg after function name)
+		numOp, err := g.genExpr(node.Children[1])
+		if err != nil {
+			return Operand{}, err
+		}
+
+		// Additional args (starting from index 2)
+		for i := 2; i < len(node.Children); i++ {
+			argOp, err := g.genExpr(node.Children[i])
+			if err != nil {
+				return Operand{}, err
+			}
+			g.emit(Instruction{
+				Op:   OpParam,
+				Src1: argOp,
+			})
+		}
+
+		// Emit syscall instruction
+		result := g.newTemp()
+		g.emit(Instruction{
+			Op:   OpSyscall,
+			Dest: result,
+			Src1: numOp,
+		})
+
+		return result, nil
+	}
+
+	// Emit parameters for regular function calls
 	for i := 1; i < len(node.Children); i++ {
 		argOp, err := g.genExpr(node.Children[i])
 		if err != nil {

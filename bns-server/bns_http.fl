@@ -1,0 +1,220 @@
+// ============================================================================
+// BNS HTTP 파싱 - 요청 파싱 및 응답 형식화
+// ============================================================================
+// HTTP/1.1 최소 구현 (GET, POST, SSE)
+
+module bns_http {
+    use bns_models;
+
+    // === HTTP 파싱 ===
+    // 요청 문자열: "GET /api/status HTTP/1.1\r\nHost: localhost\r\n\r\n{}"
+    func parse_http_request(raw_request: string) -> bns_models.HttpRequest {
+        let req: bns_models.HttpRequest;
+        req.headers = make([string], 0);
+
+        if len(raw_request) == 0 {
+            req.method = "INVALID";
+            return req;
+        }
+
+        // 라인 분리
+        let lines = split_lines(raw_request);
+        if len(lines) == 0 {
+            req.method = "INVALID";
+            return req;
+        }
+
+        // 첫 줄 파싱: "GET /api/status HTTP/1.1"
+        let first_line = lines[0];
+        let parts = split_by_space(first_line);
+
+        if len(parts) >= 2 {
+            req.method = parts[0];      // "GET", "POST", ...
+            let path_with_query = parts[1];
+
+            // 경로와 쿼리 분리
+            let qmark_idx = index_of(path_with_query, "?");
+            if qmark_idx >= 0 {
+                req.path = substring(path_with_query, 0, qmark_idx);
+                req.query = substring(path_with_query, qmark_idx, len(path_with_query));
+            } else {
+                req.path = path_with_query;
+                req.query = "";
+            }
+        }
+
+        // 헤더 파싱
+        let i = 1;
+        let body_start = -1;
+
+        for i = 1; i < len(lines); i = i + 1 {
+            let line = lines[i];
+
+            // 빈 줄 = 헤더 끝
+            if len(line) == 0 {
+                body_start = i + 1;
+                break;
+            }
+
+            // 헤더 추가
+            req.headers.push(line);
+        }
+
+        // 바디 파싱
+        if body_start >= 0 && body_start < len(lines) {
+            let body_lines = make([string], 0);
+            let j = body_start;
+            for j = body_start; j < len(lines); j = j + 1 {
+                body_lines.push(lines[j]);
+            }
+            req.body = join_strings(body_lines, "\n");
+        }
+
+        return req;
+    }
+
+    // === HTTP 응답 형식화 ===
+    // 반환: HTTP/1.1 200 OK\r\nContent-Type: ...\r\n\r\n{body}
+    func format_http_response(resp: bns_models.HttpResponse) -> string {
+        let status_line = "";
+        if resp.status_code == 200 {
+            status_line = "HTTP/1.1 200 OK";
+        } else if resp.status_code == 404 {
+            status_line = "HTTP/1.1 404 Not Found";
+        } else if resp.status_code == 500 {
+            status_line = "HTTP/1.1 500 Internal Server Error";
+        } else {
+            status_line = "HTTP/1.1 400 Bad Request";
+        }
+
+        let result = status_line + "\r\n";
+        result = result + "Content-Type: " + resp.content_type + "\r\n";
+        result = result + "Connection: keep-alive\r\n";
+
+        if resp.is_sse {
+            result = result + "Cache-Control: no-cache\r\n";
+        }
+
+        result = result + "\r\n";
+        result = result + resp.body;
+
+        return result;
+    }
+
+    // === 헬퍼 함수 ===
+    @inline
+    func split_lines(content: string) -> [string] {
+        let lines = make([string], 0);
+        let current = "";
+        let i = 0;
+        let len_val = len(content);
+
+        for i = 0; i < len_val; i = i + 1 {
+            let ch_code = char_at(content, i);
+
+            if ch_code == 10 {  // '\n'
+                // \r 제거
+                if len(current) > 0 && char_at(current, len(current) - 1) == 13 {
+                    current = substring(current, 0, len(current) - 1);
+                }
+                lines.push(current);
+                current = "";
+            } else {
+                let ch = char_from_code(ch_code);
+                current = current + ch;
+            }
+        }
+
+        if len(current) > 0 {
+            if len(current) > 0 && char_at(current, len(current) - 1) == 13 {
+                current = substring(current, 0, len(current) - 1);
+            }
+            lines.push(current);
+        }
+
+        return lines;
+    }
+
+    @inline
+    func split_by_space(line: string) -> [string] {
+        let parts = make([string], 0);
+        let current = "";
+        let i = 0;
+        let len_val = len(line);
+
+        for i = 0; i < len_val; i = i + 1 {
+            let ch_code = char_at(line, i);
+
+            if ch_code == 32 || ch_code == 9 {  // space or tab
+                if len(current) > 0 {
+                    parts.push(current);
+                    current = "";
+                }
+            } else {
+                let ch = char_from_code(ch_code);
+                current = current + ch;
+            }
+        }
+
+        if len(current) > 0 {
+            parts.push(current);
+        }
+
+        return parts;
+    }
+
+    @inline
+    func index_of(haystack: string, needle: string) -> i32 {
+        let i = 0;
+        let j = 0;
+        let h_len = len(haystack);
+        let n_len = len(needle);
+
+        if n_len == 0 || n_len > h_len {
+            return -1;
+        }
+
+        for i = 0; i <= h_len - n_len; i = i + 1 {
+            let found = true;
+            for j = 0; j < n_len; j = j + 1 {
+                if char_at(haystack, i + j) != char_at(needle, j) {
+                    found = false;
+                    break;
+                }
+            }
+            if found {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    @inline
+    func substring(s: string, start: i32, end: i32) -> string {
+        let result = "";
+        let i = start;
+
+        for i = start; i < end; i = i + 1 {
+            let ch = char_from_code(char_at(s, i));
+            result = result + ch;
+        }
+
+        return result;
+    }
+
+    @inline
+    func join_strings(parts: [string], sep: string) -> string {
+        let result = "";
+        let i = 0;
+
+        for i = 0; i < len(parts); i = i + 1 {
+            if i > 0 {
+                result = result + sep;
+            }
+            result = result + parts[i];
+        }
+
+        return result;
+    }
+}

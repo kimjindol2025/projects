@@ -1,0 +1,187 @@
+// ============================================================================
+// BNS Server - Channel 기반 HTTP 서버 (in-process)
+// ============================================================================
+// rpc.fl의 Channel을 HTTP 요청/응답으로 확장
+
+use concurrent;
+use bns_models;
+use bns_http;
+use bns_handlers;
+use bns_broadcast;
+use bns_webhook;
+
+// === 전역 채널 (클라이언트 ↔ 서버 통신) ===
+let g_request_channel: concurrent.Channel;
+let g_response_channel: concurrent.Channel;
+let g_server_running: bool = false;
+
+// === 서버 초기화 ===
+fn init_bns_server() {
+    g_request_channel = concurrent.chan_new(64);
+    g_response_channel = concurrent.chan_new(64);
+    g_server_running = true;
+    bns_broadcast.broadcast_init();
+}
+
+// === 서버 루프 (메인 진입점) ===
+fn bns_server_loop() {
+    init_bns_server();
+
+    println("🚀 BNS Server started");
+    println("Listening on localhost:28080 (in-process Channel)");
+    println("");
+    println("Endpoints:");
+    println("  GET  /api/status      - 프로젝트 상태");
+    println("  GET  /api/gogs        - Gogs 커밋");
+    println("  GET  /api/feed        - Server-Sent Events");
+    println("  GET  /api/db          - DB 상태");
+    println("  POST /webhook/gogs    - Gogs Webhook");
+    println("");
+
+    let request_count = 0;
+
+    // 단순 요청 처리 루프 (협동 스케줄링)
+    loop {
+        // 요청 수신 (논블로킹)
+        let (request_str, ok) = g_request_channel.chan_recv();
+
+        if ok && len(request_str) > 0 {
+            request_count = request_count + 1;
+
+            // HTTP 요청 파싱
+            let req = bns_http.parse_http_request(request_str);
+
+            println("[" + to_string(request_count) + "] " + req.method + " " + req.path);
+
+            // 라우팅: 핸들러 선택
+            let response: bns_models.HttpResponse;
+
+            if req.method == "POST" && req.path == "/webhook/gogs" {
+                response = bns_webhook.handle_webhook(req);
+            } else {
+                response = bns_handlers.handle_request(req);
+            }
+
+            // HTTP 응답 형식화
+            let response_str = bns_http.format_http_response(response);
+
+            // 응답 전송
+            g_response_channel.chan_send(response_str);
+        }
+
+        // 협동 양보 (다른 작업에 CPU 할당)
+        if request_count % 10 == 0 {
+            // 간단한 yield 시뮬레이션 (실제 구현에서는 sys_yield 필요)
+        }
+    }
+}
+
+// === 클라이언트 API: 요청 전송 ===
+fn send_http_request(method: string, path: string, body: string) -> string {
+    // 요청 구성 (간단한 HTTP 요청)
+    let request = method + " " + path + " HTTP/1.1\r\n";
+    request = request + "Host: localhost:28080\r\n";
+    request = request + "Content-Type: application/json\r\n";
+
+    if len(body) > 0 {
+        request = request + "Content-Length: " + to_string(len(body)) + "\r\n";
+    }
+
+    request = request + "\r\n";
+    if len(body) > 0 {
+        request = request + body;
+    }
+
+    // 요청 전송
+    g_request_channel.chan_send(request);
+
+    // 응답 수신 (폴링, max 100 tick)
+    let i = 0;
+    let response = "";
+
+    for i = 0; i < 100; i = i + 1 {
+        let (resp, ok) = g_response_channel.chan_recv();
+
+        if ok && len(resp) > 0 {
+            response = resp;
+            break;
+        }
+
+        // 짧은 대기 (실제로는 nanosleep 필요)
+    }
+
+    return response;
+}
+
+// === 테스트: 모든 엔드포인트 호출 ===
+fn test_all_endpoints() {
+    println("\n=== Testing All Endpoints ===\n");
+
+    // 1. /api/status
+    println("GET /api/status");
+    let status_resp = send_http_request("GET", "/api/status", "");
+    println(status_resp);
+    println("");
+
+    // 2. /api/gogs
+    println("GET /api/gogs");
+    let gogs_resp = send_http_request("GET", "/api/gogs", "");
+    println(gogs_resp);
+    println("");
+
+    // 3. /api/db
+    println("GET /api/db");
+    let db_resp = send_http_request("GET", "/api/db", "");
+    println(db_resp);
+    println("");
+
+    // 4. /api/feed (SSE)
+    println("GET /api/feed");
+    let feed_resp = send_http_request("GET", "/api/feed", "");
+    println(feed_resp);
+    println("");
+
+    // 5. /
+    println("GET /");
+    let root_resp = send_http_request("GET", "/", "");
+    println(root_resp);
+    println("");
+}
+
+// === 헬퍼: 정수를 문자열로 ===
+fn to_string(n: i32) -> string {
+    if n == 0 {
+        return "0";
+    }
+
+    let negative = false;
+    if n < 0 {
+        negative = true;
+        n = 0 - n;
+    }
+
+    let result = "";
+    let temp = n;
+
+    for temp > 0 {
+        let digit = temp % 10;
+        let ch = char_from_code(48 + digit);  // '0' = 48
+        result = ch + result;
+        temp = temp / 10;
+    }
+
+    if negative {
+        result = "-" + result;
+    }
+
+    return result;
+}
+
+// === Main ===
+fn main() {
+    // 서버 시작 (별도 스레드 필요 - 여기서는 간단히 테스트)
+    init_bns_server();
+
+    // 테스트 모드: 몇 가지 엔드포인트 호출
+    test_all_endpoints();
+}

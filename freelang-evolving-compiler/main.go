@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/user/freelang-evolving-compiler/internal/ast"
@@ -15,6 +17,7 @@ import (
 	"github.com/user/freelang-evolving-compiler/internal/optimizer"
 	"github.com/user/freelang-evolving-compiler/internal/parser"
 	"github.com/user/freelang-evolving-compiler/internal/profiler"
+	"github.com/user/freelang-evolving-compiler/internal/runtime"
 	"github.com/user/freelang-evolving-compiler/internal/typesys"
 )
 
@@ -26,15 +29,29 @@ func main() {
 		fmt.Println("  parse <code>         - Parse code to AST")
 		fmt.Println("  profile <code>       - Profile patterns in code")
 		fmt.Println("  report               - Show evolution report")
+		fmt.Println("  benchmark            - Run performance benchmarks")
 		fmt.Println("  compile <code>       - Full pipeline: parse->optimize->IR->codegen (soft mode)")
 		fmt.Println("  compile-strict <code> - Full pipeline with hard type checking")
+		fmt.Println("  run <code>           - Compile and execute code in VM")
+		fmt.Println("  repl                 - Interactive REPL mode")
 		return
 	}
 
 	cmd := os.Args[1]
 
+	// Commands without code argument
 	if cmd == "report" {
 		profileReport()
+		return
+	}
+
+	if cmd == "benchmark" {
+		RunBenchmark()
+		return
+	}
+
+	if cmd == "repl" {
+		replMode()
 		return
 	}
 
@@ -56,6 +73,8 @@ func main() {
 		compileCode(code)
 	case "compile-strict":
 		compileCodeStrict(code)
+	case "run":
+		runCode(code)
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
 	}
@@ -314,4 +333,130 @@ func compileCodeStrict(code string) {
 	fmt.Printf("Code size: %d bytes\n", metric.CodeSizeBy)
 	fmt.Printf("Health status: %s\n", health)
 	fmt.Printf("Optimization rules: %v\n", stats.RulesApplied)
+}
+
+func runCode(code string) {
+	start := time.Now()
+
+	// Step 1: Parse
+	p := parser.New(code)
+	prog, err := p.ParseProgram()
+	if err != nil {
+		fmt.Printf("Parse error: %v\n", err)
+		return
+	}
+
+	// Step 2: Type check (soft mode, warn but continue)
+	tc := typesys.NewTypeChecker()
+	if typeErrs := tc.Check(prog); len(typeErrs) > 0 {
+		fmt.Println("=== Type Warnings ===")
+		for _, e := range typeErrs {
+			fmt.Printf("  line %d, col %d: %s\n", e.Line, e.Col, e.Message)
+		}
+	}
+
+	// Step 3: Optimize
+	opt := optimizer.NewAdaptiveOptimizer()
+	optimized, _ := opt.OptimizeWithStats(prog)
+
+	// Step 4: Generate IR
+	gen := ir.NewGenerator()
+	irProg, err := gen.Generate(optimized)
+	if err != nil {
+		fmt.Printf("IR generation error: %v\n", err)
+		return
+	}
+
+	// Step 5: Run VM
+	vm := runtime.New(irProg)
+	result, err := vm.Run()
+	if err != nil {
+		fmt.Printf("Runtime error: %v\n", err)
+		return
+	}
+
+	// Output result
+	execTime := time.Since(start).Milliseconds()
+	fmt.Printf("=== Execution Result ===\n")
+	if result.Kind != runtime.KindNil {
+		fmt.Printf("Result: %v\n", result)
+	}
+	fmt.Printf("Execution time: %d ms\n", execTime)
+}
+
+func replMode() {
+	fmt.Println("=== FreeLang REPL ===")
+	fmt.Println("Enter code (empty line to exit):")
+
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print("fl> ")
+		if !scanner.Scan() {
+			break
+		}
+
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			fmt.Println("Exiting REPL.")
+			break
+		}
+
+		replRunLine(line)
+	}
+}
+
+func replRunLine(code string) {
+	start := time.Now()
+
+	// Parse
+	p := parser.New(code)
+	prog, err := p.ParseProgram()
+	if err != nil {
+		fmt.Printf("Parse error: %v\n", err)
+		return
+	}
+
+	// Type check
+	tc := typesys.NewTypeChecker()
+	if typeErrs := tc.Check(prog); len(typeErrs) > 0 {
+		for _, e := range typeErrs {
+			fmt.Printf("Type warning at line %d, col %d: %s\n", e.Line, e.Col, e.Message)
+		}
+	}
+
+	// Optimize
+	opt := optimizer.NewAdaptiveOptimizer()
+	optimized, _ := opt.OptimizeWithStats(prog)
+
+	// Generate IR
+	gen := ir.NewGenerator()
+	irProg, err := gen.Generate(optimized)
+	if err != nil {
+		fmt.Printf("IR generation error: %v\n", err)
+		return
+	}
+
+	// Run VM
+	vm := runtime.New(irProg)
+	result, err := vm.Run()
+	if err != nil {
+		fmt.Printf("Runtime error: %v\n", err)
+		return
+	}
+
+	// Output result and globals
+	execTime := time.Since(start).Milliseconds()
+	if result.Kind != runtime.KindNil {
+		fmt.Printf("Result: %v\n", result)
+	}
+
+	globals := vm.DumpGlobals()
+	if len(globals) > 0 {
+		fmt.Println("Globals:")
+		for name, val := range globals {
+			fmt.Printf("  %s = %v\n", name, val)
+		}
+	}
+
+	fmt.Printf("(executed in %d ms)\n", execTime)
 }

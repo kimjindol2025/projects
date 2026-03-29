@@ -1,0 +1,142 @@
+// ============================================================================
+// BNS Broadcast - SSE 이벤트 브로드캐스트 (Pub/Sub 패턴)
+// ============================================================================
+// Gogs Webhook → 모든 SSE 구독자에 이벤트 전파
+
+module bns_broadcast {
+    use concurrent;
+
+    // === 상수 ===
+    const MAX_SUBSCRIBERS: i32 = 10;
+    const MAX_EVENTS:      i32 = 256;
+
+    // === 전역 상태 ===
+    let g_event_pool:         [string];      // 이벤트 JSON 저장소
+    let g_event_count:        i32 = 0;       // 저장된 이벤트 수
+    let g_latest_event_idx:   i32 = -1;      // 최신 이벤트 인덱스
+
+    // 구독자 채널 배열 (각 SSE 연결마다 1개)
+    let g_subscriber_channels: [concurrent.Channel];
+    let g_subscriber_count:    i32 = 0;
+
+    // === 초기화 ===
+    func broadcast_init() {
+        g_event_pool = make([string], MAX_EVENTS);
+        g_subscriber_channels = make([concurrent.Channel], MAX_SUBSCRIBERS);
+        g_event_count = 0;
+        g_latest_event_idx = -1;
+        g_subscriber_count = 0;
+    }
+
+    // === 구독 (SSE 연결이 들어올 때) ===
+    func broadcast_subscribe() -> (concurrent.Channel, i32) {
+        if g_subscriber_count >= MAX_SUBSCRIBERS {
+            // 구독자 수 초과
+            let empty: concurrent.Channel;
+            return (empty, -1);
+        }
+
+        // 새 채널 생성 (capacity 64)
+        let ch = concurrent.chan_new(64);
+        g_subscriber_channels[g_subscriber_count] = ch;
+        let sub_id = g_subscriber_count;
+        g_subscriber_count = g_subscriber_count + 1;
+
+        return (ch, sub_id);
+    }
+
+    // === 구독 해제 (SSE 연결 종료 시) ===
+    func broadcast_unsubscribe(id: i32) {
+        if id < 0 || id >= g_subscriber_count {
+            return;
+        }
+
+        // 채널 닫기
+        g_subscriber_channels[id].chan_close();
+
+        // 구독자 수 감소
+        g_subscriber_count = g_subscriber_count - 1;
+    }
+
+    // === 이벤트 브로드캐스트 ===
+    // Gogs webhook에서 호출: broadcast_event(json_string)
+    func broadcast_event(event_json: string) {
+        if g_event_count >= MAX_EVENTS {
+            // 이벤트 풀 오버플로우 (순환 큐 패턴으로 개선 가능)
+            return;
+        }
+
+        // 1. 이벤트 풀에 저장
+        let idx = g_event_count;
+        g_event_pool[idx] = event_json;
+        g_latest_event_idx = idx;
+        g_event_count = g_event_count + 1;
+
+        // 2. 모든 구독자 채널에 인덱스 전송 (1→N 브로드캐스트)
+        let i = 0;
+        for i = 0; i < g_subscriber_count; i = i + 1 {
+            let ch = g_subscriber_channels[i];
+            ch.chan_send(idx as i64);  // i64로 인덱스 전송
+        }
+    }
+
+    // === 이벤트 조회 ===
+    func broadcast_get_event(idx: i64) -> string {
+        let idx_i32 = idx as i32;
+
+        if idx_i32 < 0 || idx_i32 >= g_event_count {
+            return "";
+        }
+
+        return g_event_pool[idx_i32];
+    }
+
+    // === 최신 이벤트 조회 ===
+    func broadcast_get_latest() -> string {
+        if g_latest_event_idx < 0 {
+            return "{}";  // 빈 이벤트
+        }
+
+        return g_event_pool[g_latest_event_idx];
+    }
+
+    // === 이벤트 통계 ===
+    func broadcast_get_stats() -> string {
+        let stats = "{";
+        stats = stats + "\"event_count\": " + to_string(g_event_count) + ",";
+        stats = stats + "\"subscriber_count\": " + to_string(g_subscriber_count) + ",";
+        stats = stats + "\"max_subscribers\": " + to_string(MAX_SUBSCRIBERS);
+        stats = stats + "}";
+        return stats;
+    }
+
+    // === 헬퍼: 정수를 문자열로 ===
+    @inline
+    func to_string(n: i32) -> string {
+        if n == 0 {
+            return "0";
+        }
+
+        let negative = false;
+        if n < 0 {
+            negative = true;
+            n = 0 - n;
+        }
+
+        let result = "";
+        let temp = n;
+
+        for temp > 0 {
+            let digit = temp % 10;
+            let ch = char_from_code(48 + digit);  // '0' = 48
+            result = ch + result;
+            temp = temp / 10;
+        }
+
+        if negative {
+            result = "-" + result;
+        }
+
+        return result;
+    }
+}
