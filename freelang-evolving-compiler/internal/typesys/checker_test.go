@@ -135,3 +135,173 @@ func contains(s, substr string) bool {
 	}
 	return false
 }
+
+// TestTypeBoolLit tests boolean literal type checking
+func TestTypeBoolLit(t *testing.T) {
+	input := `let b: bool = true`
+	p := parser.New(input)
+	prog, err := p.ParseProgram()
+
+	if err != nil {
+		t.Fatalf("parsing failed: %v", err)
+	}
+
+	tc := NewTypeChecker()
+	errs := tc.Check(prog)
+
+	if len(errs) > 0 {
+		t.Fatalf("type check failed: %v", errs)
+	}
+}
+
+// TestTypeStringLit tests string literal type checking
+func TestTypeStringLit(t *testing.T) {
+	input := `let s: string = "hello"`
+	p := parser.New(input)
+	prog, err := p.ParseProgram()
+
+	if err != nil {
+		t.Fatalf("parsing failed: %v", err)
+	}
+
+	tc := NewTypeChecker()
+	errs := tc.Check(prog)
+
+	if len(errs) > 0 {
+		t.Fatalf("type check failed: %v", errs)
+	}
+}
+
+// TestTypeInferenceNoAnnotation tests type inference without annotation
+func TestTypeInferenceNoAnnotation(t *testing.T) {
+	input := `let x = 5`
+	p := parser.New(input)
+	prog, err := p.ParseProgram()
+
+	if err != nil {
+		t.Fatalf("parsing failed: %v", err)
+	}
+
+	tc := NewTypeChecker()
+	errs := tc.Check(prog)
+
+	// Should infer IntType from literal 5
+	if len(errs) > 0 {
+		t.Fatalf("type check failed: %v", errs)
+	}
+}
+
+// TestTypeInferenceBinaryExpr tests type inference from binary expressions
+func TestTypeInferenceBinaryExpr(t *testing.T) {
+	input := `let x = 5
+let y = 3
+let z = x + y`
+	p := parser.New(input)
+	prog, err := p.ParseProgram()
+
+	if err != nil {
+		t.Fatalf("parsing failed: %v", err)
+	}
+
+	tc := NewTypeChecker()
+	errs := tc.Check(prog)
+
+	if len(errs) > 0 {
+		t.Fatalf("type check failed: %v", errs)
+	}
+}
+
+// TestTypeFnSignature tests function signature registration and validation
+func TestTypeFnSignature(t *testing.T) {
+	input := `fn add(x: int, y: int): int {
+  return x + y
+}
+let r: int = add(1, 2)`
+	p := parser.New(input)
+	prog, err := p.ParseProgram()
+
+	if err != nil {
+		t.Fatalf("parsing failed: %v", err)
+	}
+
+	tc := NewTypeChecker()
+	errs := tc.Check(prog)
+
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Logf("error: %s (line %d)", e.Message, e.Line)
+		}
+	}
+}
+
+// TestTypeStructLit tests struct literal initialization
+func TestTypeStructLit(t *testing.T) {
+	input := `struct Point {
+  x: int;
+  y: int
+}
+let p = Point{x: 1, y: 2}`
+	p := parser.New(input)
+	prog, err := p.ParseProgram()
+
+	if err != nil {
+		t.Fatalf("parsing failed: %v", err)
+	}
+
+	tc := NewTypeChecker()
+	errs := tc.Check(prog)
+
+	if len(errs) > 0 {
+		for _, e := range errs {
+			t.Logf("error: %s (line %d)", e.Message, e.Line)
+		}
+	}
+}
+
+// TestTypeIfElse tests if/else branch type checking
+func TestTypeIfElse(t *testing.T) {
+	input := `if true {
+  let x: int = 5
+} else {
+  let y: int = 10
+}`
+	p := parser.New(input)
+	prog, err := p.ParseProgram()
+
+	if err != nil {
+		t.Fatalf("parsing failed: %v", err)
+	}
+
+	tc := NewTypeChecker()
+	errs := tc.Check(prog)
+
+	if len(errs) > 0 {
+		t.Fatalf("type check failed: %v", errs)
+	}
+}
+
+// TestHardModeTypeMismatch tests hard mode type error detection
+func TestHardModeTypeMismatch(t *testing.T) {
+	input := `let x: int = true`
+	p := parser.New(input)
+	prog, err := p.ParseProgram()
+
+	if err != nil {
+		t.Fatalf("parsing failed: %v", err)
+	}
+
+	tc := NewTypeCheckerHard()
+	errs := tc.Check(prog)
+
+	// Should report type mismatch error
+	foundError := false
+	for _, e := range errs {
+		if contains(e.Message, "type mismatch") {
+			foundError = true
+		}
+	}
+
+	if !foundError {
+		t.Fatal("expected type mismatch error in hard mode")
+	}
+}

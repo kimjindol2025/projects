@@ -148,7 +148,7 @@ func (p *Parser) parseFnDecl() (*ast.Node, error) {
 
 	p.nextToken()
 
-	// Parse parameters (simplified: just identifiers)
+	// Parse parameters with type annotations
 	for p.curToken.Type != ast.TokenRParen {
 		if p.curToken.Type != ast.TokenIdent {
 			return nil, fmt.Errorf("expected parameter name")
@@ -157,15 +157,18 @@ func (p *Parser) parseFnDecl() (*ast.Node, error) {
 			Kind:  ast.NodeIdent,
 			Value: p.curToken.Value,
 		}
-		fnNode.Children = append(fnNode.Children, param)
 		p.nextToken()
 
+		// Parse parameter type annotation if present
 		if p.curToken.Type == ast.TokenColon {
 			p.nextToken()
 			if p.curToken.Type == ast.TokenIdent {
-				p.nextToken() // skip type for now
+				param.TypeAnnotation = p.curToken.Value // Store type annotation
+				p.nextToken()
 			}
 		}
+
+		fnNode.Children = append(fnNode.Children, param)
 
 		if p.curToken.Type == ast.TokenComma {
 			p.nextToken()
@@ -173,6 +176,15 @@ func (p *Parser) parseFnDecl() (*ast.Node, error) {
 	}
 
 	p.nextToken() // consume ')'
+
+	// Parse return type annotation if present: fn add(...): int
+	if p.curToken.Type == ast.TokenColon {
+		p.nextToken()
+		if p.curToken.Type == ast.TokenIdent {
+			fnNode.TypeAnnotation = p.curToken.Value // Store return type
+			p.nextToken()
+		}
+	}
 
 	if p.curToken.Type != ast.TokenLBrace {
 		return nil, fmt.Errorf("expected '{' for function body")
@@ -211,6 +223,21 @@ func (p *Parser) parseIfStmt() (*ast.Node, error) {
 		return nil, err
 	}
 	ifNode.Children = append(ifNode.Children, body)
+
+	// Check for else branch
+	if p.curToken.Type == ast.TokenElse {
+		p.nextToken() // consume 'else'
+
+		if p.curToken.Type != ast.TokenLBrace {
+			return nil, fmt.Errorf("expected '{' after else")
+		}
+
+		elseBody, err := p.parseBlockStmt()
+		if err != nil {
+			return nil, err
+		}
+		ifNode.Children = append(ifNode.Children, elseBody)
+	}
 
 	return ifNode, nil
 }
@@ -339,12 +366,45 @@ func (p *Parser) parsePrimary() (*ast.Node, error) {
 		}
 		return node, nil
 
-	case ast.TokenIdent:
+	case ast.TokenTrue:
 		node := &ast.Node{
-			Kind:  ast.NodeIdent,
+			Kind:  ast.NodeBoolLit,
+			Value: "true",
+			Line:  p.curToken.Line,
+			Col:   p.curToken.Col,
+		}
+		return node, nil
+
+	case ast.TokenFalse:
+		node := &ast.Node{
+			Kind:  ast.NodeBoolLit,
+			Value: "false",
+			Line:  p.curToken.Line,
+			Col:   p.curToken.Col,
+		}
+		return node, nil
+
+	case ast.TokenString:
+		node := &ast.Node{
+			Kind:  ast.NodeStringLit,
 			Value: p.curToken.Value,
 			Line:  p.curToken.Line,
 			Col:   p.curToken.Col,
+		}
+		return node, nil
+
+	case ast.TokenIdent:
+		name := p.curToken.Value
+		node := &ast.Node{
+			Kind:  ast.NodeIdent,
+			Value: name,
+			Line:  p.curToken.Line,
+			Col:   p.curToken.Col,
+		}
+		// Check if next token is '{' for struct initialization
+		if p.peekToken.Type == ast.TokenLBrace {
+			p.nextToken() // move to '{'
+			return p.parseStructLit(name)
 		}
 		return node, nil
 
@@ -528,4 +588,57 @@ func (p *Parser) parseFieldDecl() (*ast.Node, error) {
 	p.nextToken() // consume type
 
 	return fieldNode, nil
+}
+
+// parseStructLit parses struct initialization: Point{x: 1, y: 2}
+func (p *Parser) parseStructLit(name string) (*ast.Node, error) {
+	structLit := &ast.Node{
+		Kind:  ast.NodeStructLit,
+		Value: name,
+		Line:  p.curToken.Line,
+		Col:   p.curToken.Col,
+	}
+
+	p.nextToken() // consume '{'
+
+	for p.curToken.Type != ast.TokenRBrace && p.curToken.Type != ast.TokenEOF {
+		if p.curToken.Type != ast.TokenIdent {
+			return nil, fmt.Errorf("expected field name in struct init")
+		}
+
+		fieldName := p.curToken.Value
+		p.nextToken()
+
+		if p.curToken.Type != ast.TokenColon {
+			return nil, fmt.Errorf("expected ':' after field name in struct init")
+		}
+
+		p.nextToken()
+
+		// Parse field value expression
+		fieldValue, err := p.parseExpression(0)
+		if err != nil {
+			return nil, err
+		}
+
+		// Create field initialization node
+		fieldInit := &ast.Node{
+			Kind:  ast.NodeFieldDecl,
+			Value: fieldName,
+		}
+		fieldInit.Children = append(fieldInit.Children, fieldValue)
+		structLit.Children = append(structLit.Children, fieldInit)
+
+		if p.curToken.Type == ast.TokenComma {
+			p.nextToken()
+		}
+	}
+
+	if p.curToken.Type != ast.TokenRBrace {
+		return nil, fmt.Errorf("expected '}' to close struct init")
+	}
+
+	p.nextToken() // consume '}'
+
+	return structLit, nil
 }

@@ -20,6 +20,9 @@ const (
 	NodeFieldDecl               // fieldName: Type
 	NodeFieldAccess             // expr.field
 	NodeTypeAnnotation          // 타입 표현식 (int, bool, Point)
+	NodeBoolLit                 // true / false 리터럴
+	NodeStringLit               // "hello" 문자열 리터럴
+	NodeStructLit               // Point{x: 1, y: 2} 구조체 초기화
 )
 
 // Node represents a single AST node
@@ -66,6 +69,10 @@ const (
 	TokenIn
 	TokenReturn
 	TokenStruct
+	TokenTrue   // true 키워드
+	TokenFalse  // false 키워드
+	TokenString // "hello" 문자열 리터럴
+	TokenElse   // else 키워드
 )
 
 // Token represents a lexical token

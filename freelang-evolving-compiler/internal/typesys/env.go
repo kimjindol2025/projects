@@ -29,6 +29,13 @@ func (s *Scope) lookup(name string) (TypeInfo, bool) {
 	return UnknownType, false
 }
 
+// FuncDef represents a function signature
+type FuncDef struct {
+	Name       string
+	ParamTypes []TypeInfo // parameter types in order
+	ReturnType TypeInfo   // return type
+}
+
 // StructDef represents a struct definition
 type StructDef struct {
 	Name   string
@@ -37,16 +44,18 @@ type StructDef struct {
 
 // TypeEnv is the complete type environment
 type TypeEnv struct {
-	current *Scope
-	structs map[string]StructDef
+	current   *Scope
+	structs   map[string]StructDef
+	functions map[string]FuncDef
 }
 
 // NewTypeEnv creates a new type environment
 func NewTypeEnv() *TypeEnv {
 	global := newScope(nil)
 	return &TypeEnv{
-		current: global,
-		structs: make(map[string]StructDef),
+		current:   global,
+		structs:   make(map[string]StructDef),
+		functions: make(map[string]FuncDef),
 	}
 }
 
@@ -81,4 +90,15 @@ func (e *TypeEnv) RegisterStruct(name string, def StructDef) {
 func (e *TypeEnv) LookupStruct(name string) (StructDef, bool) {
 	s, exists := e.structs[name]
 	return s, exists
+}
+
+// RegisterFunc adds a function signature
+func (e *TypeEnv) RegisterFunc(name string, def FuncDef) {
+	e.functions[name] = def
+}
+
+// LookupFunc finds a function signature
+func (e *TypeEnv) LookupFunc(name string) (FuncDef, bool) {
+	f, exists := e.functions[name]
+	return f, exists
 }

@@ -190,6 +190,18 @@ func (l *Lexer) NextToken() ast.Token {
 		tok.Type = ast.TokenSemicolon
 		tok.Value = ";"
 		l.readChar()
+	case '"':
+		// String literal: "hello"
+		l.readChar() // consume opening "
+		startPos := l.pos
+		for l.ch != '"' && l.ch != 0 {
+			l.readChar()
+		}
+		tok.Value = l.input[startPos:l.pos]
+		tok.Type = ast.TokenString
+		if l.ch == '"' {
+			l.readChar() // consume closing "
+		}
 	default:
 		if isLetter(l.ch) {
 			ident := l.readIdent()
@@ -232,6 +244,12 @@ func lookupKeyword(ident string) ast.TokenType {
 		return ast.TokenReturn
 	case "struct":
 		return ast.TokenStruct
+	case "true":
+		return ast.TokenTrue
+	case "false":
+		return ast.TokenFalse
+	case "else":
+		return ast.TokenElse
 	default:
 		return ast.TokenIdent
 	}

@@ -15,15 +15,26 @@ type TypeError struct {
 
 // TypeChecker validates types in an AST
 type TypeChecker struct {
-	env    *TypeEnv
-	errors []TypeError
+	env      *TypeEnv
+	errors   []TypeError
+	hardMode bool // if true, type errors are fatal
 }
 
-// NewTypeChecker creates a new type checker
+// NewTypeChecker creates a new type checker in soft mode
 func NewTypeChecker() *TypeChecker {
 	return &TypeChecker{
-		env:    NewTypeEnv(),
-		errors: []TypeError{},
+		env:      NewTypeEnv(),
+		errors:   []TypeError{},
+		hardMode: false,
+	}
+}
+
+// NewTypeCheckerHard creates a new type checker in hard mode
+func NewTypeCheckerHard() *TypeChecker {
+	return &TypeChecker{
+		env:      NewTypeEnv(),
+		errors:   []TypeError{},
+		hardMode: true,
 	}
 }
 
@@ -76,6 +87,10 @@ func (tc *TypeChecker) checkNode(n *ast.Node) TypeInfo {
 		if len(n.Children) > 1 {
 			tc.checkNode(n.Children[1])
 		}
+		// Check else branch if present
+		if len(n.Children) > 2 {
+			tc.checkNode(n.Children[2])
+		}
 		return UnitType
 
 	case ast.NodeReturn:
@@ -102,6 +117,15 @@ func (tc *TypeChecker) checkNode(n *ast.Node) TypeInfo {
 
 	case ast.NodeIntLit:
 		return IntType
+
+	case ast.NodeBoolLit:
+		return BoolType
+
+	case ast.NodeStringLit:
+		return StringType
+
+	case ast.NodeStructLit:
+		return tc.checkStructLit(n)
 
 	case ast.NodeForStmt:
 		// Register iterator variable as int (simplified)
@@ -161,20 +185,17 @@ func (tc *TypeChecker) checkLetDecl(n *ast.Node) TypeInfo {
 	// If there's a type annotation, use it
 	if nameNode.TypeAnnotation != "" {
 		varType = TypeFromAnnotation(nameNode.TypeAnnotation)
-	} else {
-		// Infer from the value expression
-		varType = tc.checkNode(valueNode)
-	}
-
-	// Check value type matches declared type
-	valueType := tc.checkNode(valueNode)
-	if nameNode.TypeAnnotation != "" && valueType.Kind != TypeUnknown {
-		if !varType.Equals(valueType) {
+		// Check value type matches declared type
+		inferredType := tc.inferType(valueNode)
+		if inferredType.Kind != TypeUnknown && !varType.Equals(inferredType) {
 			tc.addError(
-				fmt.Sprintf("type mismatch: expected %v, got %v", varType, valueType),
+				fmt.Sprintf("type mismatch: expected %v, got %v", varType, inferredType),
 				n.Line, n.Col,
 			)
 		}
+	} else {
+		// No annotation: infer from the value expression
+		varType = tc.inferType(valueNode)
 	}
 
 	// Register the variable
@@ -182,10 +203,14 @@ func (tc *TypeChecker) checkLetDecl(n *ast.Node) TypeInfo {
 	return UnitType
 }
 
-// checkFnDecl validates function declaration
+// checkFnDecl validates function declaration and registers function signature
 func (tc *TypeChecker) checkFnDecl(n *ast.Node) TypeInfo {
-	// Register function parameters
+	fnName := n.Value
+
+	// Collect parameter types
+	paramTypes := []TypeInfo{}
 	tc.env.EnterScope()
+
 	for _, child := range n.Children {
 		if child.Kind == ast.NodeIdent {
 			// This is a parameter
@@ -193,8 +218,15 @@ func (tc *TypeChecker) checkFnDecl(n *ast.Node) TypeInfo {
 			if child.TypeAnnotation != "" {
 				paramType = TypeFromAnnotation(child.TypeAnnotation)
 			}
+			paramTypes = append(paramTypes, paramType)
 			tc.env.Define(child.Value, paramType)
 		}
+	}
+
+	// Get return type from fn node's TypeAnnotation
+	returnType := UnitType
+	if n.TypeAnnotation != "" {
+		returnType = TypeFromAnnotation(n.TypeAnnotation)
 	}
 
 	// Check function body
@@ -207,7 +239,14 @@ func (tc *TypeChecker) checkFnDecl(n *ast.Node) TypeInfo {
 
 	tc.env.ExitScope()
 
-	// Register function type (simplified for Phase 1)
+	// Register function signature
+	fnDef := FuncDef{
+		Name:       fnName,
+		ParamTypes: paramTypes,
+		ReturnType: returnType,
+	}
+	tc.env.RegisterFunc(fnName, fnDef)
+
 	return UnitType
 }
 
@@ -288,13 +327,104 @@ func (tc *TypeChecker) checkFieldAccess(n *ast.Node) TypeInfo {
 	return UnknownType
 }
 
-// checkCallExpr validates function call (simplified for Phase 1)
+// checkCallExpr validates function call and returns return type
 func (tc *TypeChecker) checkCallExpr(n *ast.Node) TypeInfo {
-	// Phase 1: Just validate that the function exists
-	name := n.Value
-	if _, found := tc.env.Lookup(name); !found && name != "print" && name != "len" && name != "str" {
-		tc.addError(fmt.Sprintf("unknown function '%s'", name), n.Line, n.Col)
+	fnName := n.Value
+
+	// Check for user-defined function
+	if fnDef, found := tc.env.LookupFunc(fnName); found {
+		// Validate argument count
+		if len(n.Children) != len(fnDef.ParamTypes) {
+			tc.addError(
+				fmt.Sprintf("function '%s' expects %d arguments, got %d", fnName, len(fnDef.ParamTypes), len(n.Children)),
+				n.Line, n.Col,
+			)
+		}
+		// Return the function's return type
+		return fnDef.ReturnType
 	}
+
+	// Check for built-in functions
+	switch fnName {
+	case "print":
+		return UnitType
+	case "len":
+		return IntType
+	case "str":
+		return StringType
+	default:
+		tc.addError(fmt.Sprintf("unknown function '%s'", fnName), n.Line, n.Col)
+		return UnknownType
+	}
+}
+
+// inferType infers the type of a node without modifying the environment
+func (tc *TypeChecker) inferType(n *ast.Node) TypeInfo {
+	if n == nil {
+		return UnknownType
+	}
+
+	switch n.Kind {
+	case ast.NodeIntLit:
+		return IntType
+	case ast.NodeBoolLit:
+		return BoolType
+	case ast.NodeStringLit:
+		return StringType
+	case ast.NodeStructLit:
+		// Infer struct type from the struct name
+		return StructType(n.Value)
+	case ast.NodeIdent:
+		// Look up variable type
+		if t, found := tc.env.Lookup(n.Value); found {
+			return t
+		}
+		return UnknownType
+	case ast.NodeBinaryExpr:
+		return tc.checkBinaryExpr(n)
+	case ast.NodeFieldAccess:
+		return tc.checkFieldAccess(n)
+	case ast.NodeCallExpr:
+		return tc.checkCallExpr(n)
+	default:
+		return UnknownType
+	}
+}
+
+// checkStructLit validates struct initialization
+func (tc *TypeChecker) checkStructLit(n *ast.Node) TypeInfo {
+	structName := n.Value
+
+	// Look up struct definition
+	if structDef, found := tc.env.LookupStruct(structName); found {
+		// Validate field initializations
+		for _, child := range n.Children {
+			if child.Kind == ast.NodeFieldDecl {
+				fieldName := child.Value
+				if _, fieldExists := structDef.Fields[fieldName]; !fieldExists {
+					tc.addError(
+						fmt.Sprintf("unknown field '%s' in struct '%s'", fieldName, structName),
+						child.Line, child.Col,
+					)
+				}
+				// Check field value type if we have field type info
+				if len(child.Children) > 0 {
+					fieldValueType := tc.inferType(child.Children[0])
+					expectedType := structDef.Fields[fieldName]
+					if fieldValueType.Kind != TypeUnknown && expectedType.Kind != TypeUnknown && !fieldValueType.Equals(expectedType) {
+						tc.addError(
+							fmt.Sprintf("field '%s' type mismatch: expected %v, got %v", fieldName, expectedType, fieldValueType),
+							child.Line, child.Col,
+						)
+					}
+				}
+			}
+		}
+		return StructType(structName)
+	}
+
+	// Struct not found
+	tc.addError(fmt.Sprintf("unknown struct '%s'", structName), n.Line, n.Col)
 	return UnknownType
 }
 
