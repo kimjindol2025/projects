@@ -1,0 +1,17 @@
+{
+  "name": "freelang-blog",
+  "version": "1.0.0",
+  "description": "FreeLang Technical Blog with Comments System",
+  "main": "server-comments.js",
+  "scripts": {
+    "start": "node server-comments.js",
+    "dev": "node server-comments.js 8253",
+    "test": "echo \"Tests not implemented yet\""
+  },
+  "keywords": ["blog", "freelang", "nodejs"],
+  "author": "FreeLang Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
