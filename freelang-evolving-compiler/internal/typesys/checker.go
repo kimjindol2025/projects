@@ -125,6 +125,12 @@ func (tc *TypeChecker) checkNode(n *ast.Node) TypeInfo {
 	case ast.NodeBinaryExpr:
 		return tc.checkBinaryExpr(n)
 
+	case ast.NodeUnaryExpr:
+		return tc.checkUnaryExpr(n)
+
+	case ast.NodeLogicalExpr:
+		return tc.checkLogicalExpr(n)
+
 	case ast.NodeFieldAccess:
 		return tc.checkFieldAccess(n)
 
@@ -305,6 +311,89 @@ func (tc *TypeChecker) checkBinaryExpr(n *ast.Node) TypeInfo {
 		if !leftType.Equals(rightType) && leftType.Kind != TypeUnknown && rightType.Kind != TypeUnknown {
 			tc.addError(
 				fmt.Sprintf("type mismatch in %s: %v vs %v", op, leftType, rightType),
+				n.Line, n.Col,
+			)
+		}
+		return BoolType
+	}
+
+	// Logical operators: both operands must be bool, result is bool
+	if op == "&&" || op == "||" {
+		if leftType.Kind != TypeBool && leftType.Kind != TypeUnknown {
+			tc.addError(
+				fmt.Sprintf("left operand of %s must be bool, got %v", op, leftType),
+				n.Line, n.Col,
+			)
+		}
+		if rightType.Kind != TypeBool && rightType.Kind != TypeUnknown {
+			tc.addError(
+				fmt.Sprintf("right operand of %s must be bool, got %v", op, rightType),
+				n.Line, n.Col,
+			)
+		}
+		return BoolType
+	}
+
+	return UnknownType
+}
+
+// checkUnaryExpr validates unary expression (!, -)
+func (tc *TypeChecker) checkUnaryExpr(n *ast.Node) TypeInfo {
+	if len(n.Children) < 1 {
+		return UnknownType
+	}
+
+	operandType := tc.checkNode(n.Children[0])
+	op := n.Value
+
+	switch op {
+	case "!":
+		// Logical NOT: operand must be bool, result is bool
+		if operandType.Kind != TypeBool && operandType.Kind != TypeUnknown {
+			tc.addError(
+				fmt.Sprintf("operand of ! must be bool, got %v", operandType),
+				n.Line, n.Col,
+			)
+		}
+		return BoolType
+
+	case "-":
+		// Arithmetic negation: operand must be int, result is int
+		if operandType.Kind != TypeInt && operandType.Kind != TypeUnknown {
+			tc.addError(
+				fmt.Sprintf("operand of - must be int, got %v", operandType),
+				n.Line, n.Col,
+			)
+		}
+		return IntType
+
+	default:
+		return UnknownType
+	}
+}
+
+// checkLogicalExpr validates logical expression (&&, ||)
+func (tc *TypeChecker) checkLogicalExpr(n *ast.Node) TypeInfo {
+	if len(n.Children) < 2 {
+		return UnknownType
+	}
+
+	leftType := tc.checkNode(n.Children[0])
+	rightType := tc.checkNode(n.Children[1])
+
+	op := n.Value
+
+	// Both && and || require bool operands and return bool
+	if op == "&&" || op == "||" {
+		if leftType.Kind != TypeBool && leftType.Kind != TypeUnknown {
+			tc.addError(
+				fmt.Sprintf("left operand of %s must be bool, got %v", op, leftType),
+				n.Line, n.Col,
+			)
+		}
+		if rightType.Kind != TypeBool && rightType.Kind != TypeUnknown {
+			tc.addError(
+				fmt.Sprintf("right operand of %s must be bool, got %v", op, rightType),
 				n.Line, n.Col,
 			)
 		}

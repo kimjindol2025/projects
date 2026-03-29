@@ -18,6 +18,9 @@ const (
 	OpGt
 	OpLe
 	OpGe
+	OpNot      // 논리 NOT: !x
+	OpAnd      // 논리 AND: x && y
+	OpOr       // 논리 OR: x || y
 	OpLabel
 	OpJump
 	OpJumpIf

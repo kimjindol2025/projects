@@ -143,6 +143,23 @@ func (cg *CodeGen) generateInstruction(instr ir.Instruction) {
 			cg.formatOperand(instr.Src1),
 			cg.formatOperand(instr.Src2)))
 
+	case ir.OpNot:
+		cg.writeLine(fmt.Sprintf("  NOT %s, %s",
+			cg.formatOperand(instr.Dest),
+			cg.formatOperand(instr.Src1)))
+
+	case ir.OpAnd:
+		cg.writeLine(fmt.Sprintf("  AND %s, %s, %s",
+			cg.formatOperand(instr.Dest),
+			cg.formatOperand(instr.Src1),
+			cg.formatOperand(instr.Src2)))
+
+	case ir.OpOr:
+		cg.writeLine(fmt.Sprintf("  OR %s, %s, %s",
+			cg.formatOperand(instr.Dest),
+			cg.formatOperand(instr.Src1),
+			cg.formatOperand(instr.Src2)))
+
 	case ir.OpLabel:
 		cg.writeLine(fmt.Sprintf("%s:", instr.Label))
 

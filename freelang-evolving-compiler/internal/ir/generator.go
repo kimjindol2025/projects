@@ -353,6 +353,9 @@ func (g *Generator) genExpr(node *ast.Node) (Operand, error) {
 	case ast.NodeBinaryExpr:
 		return g.genBinaryExpr(node)
 
+	case ast.NodeUnaryExpr:
+		return g.genUnaryExpr(node)
+
 	case ast.NodeCallExpr:
 		return g.genCallExpr(node)
 
@@ -395,6 +398,43 @@ func (g *Generator) genBinaryExpr(node *ast.Node) (Operand, error) {
 		Src1: left,
 		Src2: right,
 	})
+
+	return result, nil
+}
+
+// genUnaryExpr generates IR for a unary expression (!, -)
+func (g *Generator) genUnaryExpr(node *ast.Node) (Operand, error) {
+	if len(node.Children) < 1 {
+		return Operand{}, fmt.Errorf("unary expression requires 1 operand")
+	}
+
+	operand, err := g.genExpr(node.Children[0])
+	if err != nil {
+		return Operand{}, err
+	}
+
+	result := g.newTemp()
+	op := node.Value
+
+	switch op {
+	case "!":
+		// Logical NOT
+		g.emit(Instruction{
+			Op:   OpNot,
+			Dest: result,
+			Src1: operand,
+		})
+	case "-":
+		// Arithmetic negation: negate by subtracting from 0
+		g.emit(Instruction{
+			Op:   OpSub,
+			Dest: result,
+			Src1: Operand{IsImm: true, ImmVal: 0},
+			Src2: operand,
+		})
+	default:
+		return Operand{}, fmt.Errorf("unsupported unary operator: %s", op)
+	}
 
 	return result, nil
 }
@@ -512,6 +552,10 @@ func (g *Generator) opcodeFromOp(op string) Opcode {
 		return OpLe
 	case ">=":
 		return OpGe
+	case "&&":
+		return OpAnd
+	case "||":
+		return OpOr
 	default:
 		return OpNoop
 	}
