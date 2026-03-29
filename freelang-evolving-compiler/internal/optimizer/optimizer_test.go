@@ -294,9 +294,9 @@ func TestRuleOrder(t *testing.T) {
 		t.Errorf("expected at least 2 rules, got %d", len(rules))
 	}
 
-	// First rule should be constant folding
-	if rules[0].Name != "ConstantFolding" {
-		t.Errorf("expected first rule to be ConstantFolding, got %s", rules[0].Name)
+	// First rule should be LoopInvariantMovement (priority 101)
+	if rules[0].Name != "LoopInvariantMovement" {
+		t.Errorf("expected first rule to be LoopInvariantMovement, got %s", rules[0].Name)
 	}
 }
 

@@ -2,6 +2,8 @@
 package optimizer
 
 import (
+	"fmt"
+
 	"github.com/user/freelang-evolving-compiler/internal/ast"
 	"github.com/user/freelang-evolving-compiler/internal/profiler"
 )
@@ -108,21 +110,75 @@ func initInliningRule() {
 var LoopInvariantMovementRule OptimizationRule
 
 func initLoopInvariantMovementRule() {
+	globalLicmCounter := 0 // 프로그램 전체에서 단조 증가하는 counter
+
 	LoopInvariantMovementRule = OptimizationRule{
 		Name:          "LoopInvariantMovement",
 		TargetPattern: profiler.PatternLoopInvariant,
-		Priority:      60,
+		Priority:      101, // ConstantFolding(100) 보다 먼저 실행
 		Description:   "Move loop-invariant expressions outside loops",
 		Apply: func(node *ast.Node) *ast.Node {
 			if node == nil {
 				return node
 			}
 
+			// 먼저 자식에 재귀 적용
 			for i, child := range node.Children {
 				node.Children[i] = LoopInvariantMovementRule.Apply(child)
 			}
 
-			return node
+			// for 루프 노드만 LICM 처리
+			if node.Kind != ast.NodeForStmt || len(node.Children) < 3 {
+				return node
+			}
+			body := node.Children[2]
+			if body.Kind != ast.NodeBlockStmt {
+				return node
+			}
+
+			// 불변식 수집 및 본문 교체
+			var hoisted []*ast.Node
+			var newBody []*ast.Node
+
+			for _, stmt := range body.Children {
+				if isInvariantLetDecl(stmt) {
+					licmName := fmt.Sprintf("__licm_%d", globalLicmCounter)
+					globalLicmCounter++
+
+					// 호이스팅: let __licm_N = <원래 상수 식>
+					hoisted = append(hoisted, &ast.Node{
+						Kind:     ast.NodeLetDecl,
+						Line:     stmt.Line,
+						Col:      stmt.Col,
+						Children: []*ast.Node{
+							{Kind: ast.NodeIdent, Value: licmName},
+							stmt.Children[1],
+						},
+					})
+					// 루프 내부 교체: let x = __licm_N
+					newBody = append(newBody, &ast.Node{
+						Kind:     ast.NodeLetDecl,
+						Line:     stmt.Line,
+						Col:      stmt.Col,
+						Children: []*ast.Node{
+							stmt.Children[0],
+							{Kind: ast.NodeIdent, Value: licmName},
+						},
+					})
+				} else {
+					newBody = append(newBody, stmt)
+				}
+			}
+
+			if len(hoisted) == 0 {
+				return node
+			}
+
+			body.Children = newBody
+			// 루프 노드를 wrapper로 감싸기
+			wrapper := &ast.Node{Kind: ast.NodeBlockStmt, Line: node.Line, Col: node.Col}
+			wrapper.Children = append(hoisted, node)
+			return wrapper
 		},
 	}
 }
@@ -243,4 +299,17 @@ func DefaultRules() []OptimizationRule {
 		LoopInvariantMovementRule,
 		CommonSubexpressionRule,
 	}
+}
+
+// isInvariantLetDecl returns true if stmt is: let x = <const BinaryExpr>
+func isInvariantLetDecl(stmt *ast.Node) bool {
+	if stmt == nil || stmt.Kind != ast.NodeLetDecl || len(stmt.Children) != 2 {
+		return false
+	}
+	val := stmt.Children[1]
+	return val != nil &&
+		val.Kind == ast.NodeBinaryExpr &&
+		len(val.Children) == 2 &&
+		val.Children[0].Kind == ast.NodeIntLit &&
+		val.Children[1].Kind == ast.NodeIntLit
 }

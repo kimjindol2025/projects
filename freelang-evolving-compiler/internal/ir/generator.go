@@ -229,6 +229,18 @@ func (g *Generator) genForStmt(node *ast.Node) error {
 		return fmt.Errorf("range expression requires start and end")
 	}
 
+	// 상수 범위 감지: 언롤링 시도
+	startNode := rangeExpr.Children[0]
+	endNode := rangeExpr.Children[1]
+	if sv, ok1 := isConstIntLit(startNode); ok1 {
+		if ev, ok2 := isConstIntLit(endNode); ok2 {
+			count := ev - sv
+			if count >= 0 && count <= loopUnrollThreshold {
+				return g.genUnrolledFor(iterName, sv, ev, bodyStmt)
+			}
+		}
+	}
+
 	startOp, err := g.genExpr(rangeExpr.Children[0])
 	if err != nil {
 		return err
@@ -437,6 +449,21 @@ func (g *Generator) genUnaryExpr(node *ast.Node) (Operand, error) {
 	}
 
 	return result, nil
+}
+
+// genUnrolledFor inlines a constant-range loop without labels or jumps
+func (g *Generator) genUnrolledFor(iterName string, start, end int64, body *ast.Node) error {
+	for i := start; i < end; i++ {
+		g.emit(Instruction{
+			Op:   OpCopy,
+			Dest: Operand{Name: iterName},
+			Src1: Operand{IsImm: true, ImmVal: i},
+		})
+		if err := g.genStmt(body); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // genCallExpr generates IR for a function call
@@ -693,4 +720,16 @@ func (g *Generator) genIndexExpr(node *ast.Node) (Operand, error) {
 	})
 
 	return result, nil
+}
+
+const loopUnrollThreshold = 8
+
+// isConstIntLit checks if a node is a NodeIntLit and returns its int64 value
+func isConstIntLit(node *ast.Node) (int64, bool) {
+	if node.Kind != ast.NodeIntLit {
+		return 0, false
+	}
+	var val int64
+	fmt.Sscanf(node.Value, "%d", &val)
+	return val, true
 }

@@ -269,3 +269,47 @@ func TestProgramByteSize(t *testing.T) {
 		t.Errorf("expected byte size %d, got %d", expectedSize, byteSize)
 	}
 }
+
+func TestGenerateForStmtUnrolled(t *testing.T) {
+	code := "for i in 0..3 { let x = i; }"
+	p := parser.New(code)
+	prog, err := p.ParseProgram()
+	if err != nil {
+		t.Fatalf("parsing failed: %v", err)
+	}
+
+	gen := NewGenerator()
+	irProg, err := gen.Generate(prog)
+	if err != nil {
+		t.Fatalf("IR generation failed: %v", err)
+	}
+
+	// Unrolled loop should have no OpLabel or OpJump
+	hasLabel := false
+	hasJump := false
+	for _, instr := range irProg.Main {
+		if instr.Op == OpLabel {
+			hasLabel = true
+		}
+		if instr.Op == OpJump || instr.Op == OpJumpIfFalse {
+			hasJump = true
+		}
+	}
+
+	if hasLabel || hasJump {
+		t.Errorf("expected no labels or jumps in unrolled loop, hasLabel=%v, hasJump=%v", hasLabel, hasJump)
+	}
+
+	// Should have 3 copies of the loop variable assignment
+	copyCount := 0
+	for _, instr := range irProg.Main {
+		if instr.Op == OpCopy && instr.Dest.Name == "i" {
+			copyCount++
+		}
+	}
+	if copyCount != 3 {
+		t.Errorf("expected 3 copies for loop unrolling (0..3), got %d", copyCount)
+	}
+
+	t.Log("✓ Unrolled loop IR generated correctly")
+}
