@@ -422,6 +422,20 @@ func (p *Parser) parsePrimary() (*ast.Node, error) {
 	case ast.TokenLBracket:
 		return p.parseArrayLit()
 
+	case ast.TokenBang:
+		p.nextToken()
+		expr, err := p.parsePrimary()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.Node{
+			Kind:     ast.NodeUnaryExpr,
+			Value:    "!",
+			Line:     p.curToken.Line,
+			Col:      p.curToken.Col,
+			Children: []*ast.Node{expr},
+		}, nil
+
 	default:
 		return nil, fmt.Errorf("unexpected token: %v", p.curToken.Type)
 	}
@@ -499,6 +513,10 @@ func (p *Parser) curPrecedence() int {
 
 func precedence(tok ast.TokenType) int {
 	switch tok {
+	case ast.TokenOr:
+		return 0
+	case ast.TokenAnd:
+		return 1
 	case ast.TokenEq, ast.TokenNe, ast.TokenLt, ast.TokenGt, ast.TokenLe, ast.TokenGe:
 		return 1
 	case ast.TokenPlus, ast.TokenMinus:

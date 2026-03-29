@@ -125,9 +125,9 @@ func (l *Lexer) NextToken() ast.Token {
 			tok.Value = "!="
 			l.readChar()
 		} else {
-			// Single ! not supported for now
+			tok.Type = ast.TokenBang
+			tok.Value = "!"
 			l.readChar()
-			return l.NextToken()
 		}
 	case '<':
 		if l.peekChar() == '=' {
@@ -198,6 +198,28 @@ func (l *Lexer) NextToken() ast.Token {
 		tok.Type = ast.TokenRBracket
 		tok.Value = "]"
 		l.readChar()
+	case '&':
+		if l.peekChar() == '&' {
+			l.readChar()
+			tok.Type = ast.TokenAnd
+			tok.Value = "&&"
+			l.readChar()
+		} else {
+			// Single & not supported, skip
+			l.readChar()
+			return l.NextToken()
+		}
+	case '|':
+		if l.peekChar() == '|' {
+			l.readChar()
+			tok.Type = ast.TokenOr
+			tok.Value = "||"
+			l.readChar()
+		} else {
+			// Single | not supported, skip
+			l.readChar()
+			return l.NextToken()
+		}
 	case '"':
 		// String literal: "hello"
 		l.readChar() // consume opening "

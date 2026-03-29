@@ -25,6 +25,8 @@ const (
 	NodeStructLit               // Point{x: 1, y: 2} 구조체 초기화
 	NodeArrayLit                // [1, 2, 3] 배열 리터럴
 	NodeIndexExpr               // arr[i] 인덱싱
+	NodeUnaryExpr               // !x, -x 단항 연산자
+	NodeLogicalExpr             // x && y, x || y 논리 연산자
 )
 
 // Node represents a single AST node
@@ -77,6 +79,9 @@ const (
 	TokenElse     // else 키워드
 	TokenLBracket // [
 	TokenRBracket // ]
+	TokenAnd      // &&
+	TokenOr       // ||
+	TokenBang     // !
 )
 
 // Token represents a lexical token
