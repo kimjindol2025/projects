@@ -15,6 +15,7 @@ import (
 	"github.com/user/freelang-evolving-compiler/internal/optimizer"
 	"github.com/user/freelang-evolving-compiler/internal/parser"
 	"github.com/user/freelang-evolving-compiler/internal/profiler"
+	"github.com/user/freelang-evolving-compiler/internal/typesys"
 )
 
 func main() {
@@ -171,6 +172,17 @@ func compileCode(code string) {
 	if err != nil {
 		fmt.Printf("Parse error: %v\n", err)
 		return
+	}
+
+	// Step 1.5: Type check
+	tc := typesys.NewTypeChecker()
+	if typeErrs := tc.Check(prog); len(typeErrs) > 0 {
+		fmt.Println("=== Type Errors ===")
+		for _, e := range typeErrs {
+			fmt.Printf("  line %d, col %d: %s\n", e.Line, e.Col, e.Message)
+		}
+		// Soft mode: warn but continue compilation
+		fmt.Println("(Continuing compilation in soft mode...)")
 	}
 
 	// Step 2: Collect patterns

@@ -4,30 +4,32 @@ package ast
 type NodeKind int
 
 const (
-	NodeProgram NodeKind = iota
-	NodeLetDecl        // let x = expr
-	NodeFnDecl         // fn name(params) body
-	NodeIfStmt         // if cond { body }
-	NodeForStmt        // for i in range { body }
-	NodeBinaryExpr     // a + b, a * b
-	NodeCallExpr       // fn(args)
-	NodeIdent          // 변수 참조
-	NodeIntLit         // 정수 리터럴
-	NodeReturn         // return expr
-	NodeBlockStmt      // { statements }
-	NodeRangeExpr      // 0..10
-	NodeStructDecl     // struct Name { fields }
-	NodeFieldDecl      // fieldName: Type
-	NodeFieldAccess    // expr.field
+	NodeProgram        NodeKind = iota
+	NodeLetDecl                 // let x = expr
+	NodeFnDecl                  // fn name(params) body
+	NodeIfStmt                  // if cond { body }
+	NodeForStmt                 // for i in range { body }
+	NodeBinaryExpr              // a + b, a * b
+	NodeCallExpr                // fn(args)
+	NodeIdent                   // 변수 참조
+	NodeIntLit                  // 정수 리터럴
+	NodeReturn                  // return expr
+	NodeBlockStmt               // { statements }
+	NodeRangeExpr               // 0..10
+	NodeStructDecl              // struct Name { fields }
+	NodeFieldDecl               // fieldName: Type
+	NodeFieldAccess             // expr.field
+	NodeTypeAnnotation          // 타입 표현식 (int, bool, Point)
 )
 
 // Node represents a single AST node
 type Node struct {
-	Kind     NodeKind
-	Value    string   // ident/literal 값
-	Children []*Node  // 자식 노드
-	Line     int
-	Col      int
+	Kind           NodeKind
+	Value          string  // ident/literal 값
+	Children       []*Node // 자식 노드
+	Line           int
+	Col            int
+	TypeAnnotation string // 명시적 타입 어노테이션 ("int", "bool", "Point", "")
 }
 
 // TokenType defines token types
@@ -42,12 +44,12 @@ const (
 	TokenStar
 	TokenSlash
 	TokenAssign
-	TokenEq  // ==
-	TokenNe  // !=
-	TokenLt  // <
-	TokenGt  // >
-	TokenLe  // <=
-	TokenGe  // >=
+	TokenEq // ==
+	TokenNe // !=
+	TokenLt // <
+	TokenGt // >
+	TokenLe // <=
+	TokenGe // >=
 	TokenDot
 	TokenDotDot // ..
 	TokenLParen

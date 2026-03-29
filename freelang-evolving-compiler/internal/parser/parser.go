@@ -101,6 +101,16 @@ func (p *Parser) parseLetDecl() (*ast.Node, error) {
 
 	p.nextToken() // consume identifier
 
+	// Check for type annotation: let x: int = ...
+	if p.curToken.Type == ast.TokenColon {
+		p.nextToken() // consume ':'
+		if p.curToken.Type != ast.TokenIdent {
+			return nil, fmt.Errorf("expected type name after ':'")
+		}
+		nameNode.TypeAnnotation = p.curToken.Value // "int", "bool", "Point", etc.
+		p.nextToken()                              // consume type name
+	}
+
 	if p.curToken.Type != ast.TokenAssign {
 		return nil, fmt.Errorf("expected '=' after identifier")
 	}
@@ -512,6 +522,7 @@ func (p *Parser) parseFieldDecl() (*ast.Node, error) {
 		Line:  p.curToken.Line,
 		Col:   p.curToken.Col,
 	}
+	fieldNode.TypeAnnotation = p.curToken.Value // Store type annotation directly
 	fieldNode.Children = append(fieldNode.Children, typeNode)
 
 	p.nextToken() // consume type
