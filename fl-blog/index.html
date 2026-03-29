@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FreeLang 기술 블로그 - 우리 기술 & 검증 리포트</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f8f9fa;
+      color: #333;
+    }
+
+    .navbar {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px 0;
+      border-bottom: 3px solid #ffd700;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .navbar-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: white;
+    }
+
+    .navbar h1 { font-size: 1.5em; }
+
+    .navbar-links {
+      display: flex;
+      gap: 30px;
+    }
+
+    .navbar-links a {
+      color: white;
+      text-decoration: none;
+      font-size: 0.95em;
+      transition: opacity 0.3s;
+    }
+
+    .navbar-links a:hover {
+      opacity: 0.8;
+      text-decoration: underline;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 60px 40px;
+      border-radius: 12px;
+      margin-bottom: 50px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+
+    .hero h1 {
+      font-size: 3em;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .hero p {
+      font-size: 1.2em;
+      opacity: 0.95;
+      line-height: 1.6;
+    }
+
+    .section-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-bottom: 60px;
+    }
+
+    .section {
+      background: white;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .section h2 {
+      font-size: 2em;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 3px solid;
+    }
+
+    .section-promo h2 {
+      border-bottom-color: #667eea;
+      color: #667eea;
+    }
+
+    .section-tech h2 {
+      border-bottom-color: #ff6b6b;
+      color: #ff6b6b;
+    }
+
+    .section p {
+      font-size: 1.05em;
+      line-height: 1.8;
+      margin-bottom: 25px;
+      color: #666;
+    }
+
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      margin: 30px 0;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      text-align: center;
+      flex: 1;
+      min-width: 150px;
+      padding: 15px;
+    }
+
+    .stat-number {
+      font-size: 2.5em;
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    .stat-label {
+      font-size: 0.9em;
+      color: #999;
+      margin-top: 5px;
+    }
+
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    .report-table th {
+      background: #f5f5f5;
+      padding: 12px;
+      text-align: left;
+      border-bottom: 2px solid #ddd;
+      font-weight: 600;
+    }
+
+    .report-table td {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .status-check { color: #28a745; font-weight: 600; }
+    .status-warn { color: #ffc107; font-weight: 600; }
+    .status-x { color: #dc3545; font-weight: 600; }
+
+    ul {
+      margin-left: 20px;
+      color: #666;
+      line-height: 1.8;
+    }
+
+    ul li {
+      margin-bottom: 8px;
+    }
+
+    h3 {
+      margin-top: 25px;
+      color: #667eea;
+      font-size: 1.1em;
+    }
+
+    .filter-tabs {
+      display: flex;
+      gap: 10px;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 8px 16px;
+      border: 2px solid #ddd;
+      background: white;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-size: 0.9em;
+    }
+
+    .filter-btn.active {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    .filter-btn:hover {
+      border-color: #667eea;
+    }
+
+    .posts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+      margin-top: 30px;
+    }
+
+    .post-card {
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: transform 0.3s, box-shadow 0.3s;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .post-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+    }
+
+    .post-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 15px;
+      color: white;
+    }
+
+    .post-date {
+      font-size: 0.8em;
+      opacity: 0.9;
+      margin-bottom: 8px;
+    }
+
+    .post-title {
+      font-size: 1.1em;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .post-body {
+      padding: 15px;
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .post-excerpt {
+      color: #666;
+      line-height: 1.5;
+      font-size: 0.9em;
+      flex-grow: 1;
+    }
+
+    .post-link {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.9em;
+      margin-top: 10px;
+    }
+
+    .post-link:hover {
+      text-decoration: underline;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 80px;
+      padding: 40px 20px;
+      border-top: 2px solid #eee;
+      color: #666;
+    }
+
+    .footer a {
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+
+    .error {
+      background: #ffe0e0;
+      border: 2px solid #ff6b6b;
+      color: #c92a2a;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+
+    @media (max-width: 768px) {
+      .section-grid { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 2em; }
+      .hero { padding: 40px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <div class="navbar-content">
+      <h1>🚀 FreeLang</h1>
+      <div class="navbar-links">
+        <a href="#promo">우리 기술</a>
+        <a href="#tech">기술 검증</a>
+        <a href="https://github.com/kimjindol2025" target="_blank">GitHub</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="hero">
+      <h1>FreeLang 기술 블로그</h1>
+      <p>
+        🎯 <strong>우리 기술의 수준을 세상에 알리고</strong><br>
+        📊 <strong>기술 부족한 점을 공식적으로 검증하는</strong><br>
+        기술 블로그 & 검증 플랫폼
+      </p>
+    </div>
+
+    <!-- 섹션: 우리 기술 vs 기술 검증 -->
+    <div class="section-grid">
+      <div class="section section-promo" id="promo">
+        <h2>🌟 우리 기술 (외부 홍보)</h2>
+        <p>
+          FreeLang의 우수한 기술과 성과를 소개합니다.
+          컴파일러, 데이터베이스, 시스템 설계 등 핵심 기술력을 입증합니다.
+        </p>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-number">89</div>
+            <div class="stat-label">기술 포스트</div>
+          </div>
+          <div class="stat">
+            <div class="stat-number">50K+</div>
+            <div class="stat-label">단어</div>
+          </div>
+          <div class="stat">
+            <div class="stat-number">100+</div>
+            <div class="stat-label">코드 예시</div>
+          </div>
+        </div>
+
+        <h3>✅ 핵심 성과</h3>
+        <ul>
+          <li>메모리 최적화 (3.6배 성능 향상)</li>
+          <li>분산 합의 알고리즘 (Raft)</li>
+          <li>Zero-Copy 데이터베이스 설계</li>
+          <li>LSM Tree 구현</li>
+          <li>MVCC 동시성 제어</li>
+        </ul>
+      </div>
+
+      <div class="section section-tech" id="tech">
+        <h2>📋 기술 검증 리포트</h2>
+        <p>
+          현재 기술 상태를 공식적으로 검증하고,
+          부족한 점을 명확히 기록합니다.
+        </p>
+
+        <table class="report-table">
+          <tr>
+            <th>분야</th>
+            <th>상태</th>
+            <th>비고</th>
+          </tr>
+          <tr>
+            <td>컴파일러</td>
+            <td class="status-check">✅ 완성</td>
+            <td>Lexer→Parser→AST</td>
+          </tr>
+          <tr>
+            <td>데이터베이스</td>
+            <td class="status-check">✅ 우수</td>
+            <td>Zero-Copy, MVCC 구현</td>
+          </tr>
+          <tr>
+            <td>마크다운</td>
+            <td class="status-warn">⚠️ 기본</td>
+            <td>테이블, 각주 미지원</td>
+          </tr>
+          <tr>
+            <td>검색</td>
+            <td class="status-x">❌ 미구현</td>
+            <td>향후 추가</td>
+          </tr>
+          <tr>
+            <td>댓글</td>
+            <td class="status-x">❌ 미구현</td>
+            <td>Disqus 필요</td>
+          </tr>
+        </table>
+
+        <h3>🔧 개선 필요</h3>
+        <ul>
+          <li>SQL 쿼리 최적화</li>
+          <li>분산 트랜잭션 지원</li>
+          <li>실시간 인덱싱</li>
+          <li>고급 마크다운</li>
+          <li>성능 모니터링</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 포스트 필터 -->
+    <div style="margin: 50px 0;">
+      <h2>📚 기술 포스트</h2>
+      <div class="filter-tabs">
+        <button class="filter-btn active" onclick="filterPosts('all')">전체 (89)</button>
+        <button class="filter-btn" onclick="filterPosts('promo')">우리 기술 홍보</button>
+        <button class="filter-btn" onclick="filterPosts('tech')">기술 검증</button>
+      </div>
+
+      <div id="posts-container" class="posts-grid">
+        <div class="loading">📚 포스트 로딩 중...</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>
+        <strong>FreeLang 기술 블로그</strong><br>
+        우리 기술을 세상에 알리고, 부족한 점을 공식 기록합니다.<br>
+        <a href="http://localhost:8253/health" target="_blank">Backend API</a> |
+        <a href="https://github.com/kimjindol2025/freelang-blog-posts" target="_blank">GitHub</a><br>
+        <small>© 2026 FreeLang Team. 모든 포스트는 실제 검증된 코드 기반입니다.</small>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const BACKEND_URL = 'http://localhost:8253';
+    let allPosts = [];
+
+    async function loadPosts() {
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/posts`);
+        if (!response.ok) throw new Error(`Error: ${response.status}`);
+
+        allPosts = await response.json();
+
+        // 카테고리 할당
+        allPosts = allPosts.map((p, i) => ({
+          ...p,
+          category: i < 35 ? 'promo' : 'tech'
+        }));
+
+        displayPosts(allPosts);
+      } catch (error) {
+        displayError(error.message);
+      }
+    }
+
+    function filterPosts(cat) {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+
+      const filtered = cat === 'all' ? allPosts : allPosts.filter(p => p.category === cat);
+      displayPosts(filtered);
+    }
+
+    function displayPosts(posts) {
+      const container = document.getElementById('posts-container');
+      container.innerHTML = '';
+
+      posts.forEach(post => {
+        const date = new Date(post.date);
+        const dateStr = date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' });
+        const badge = post.category === 'promo' ? '🌟 홍보' : '📊 검증';
+
+        const card = document.createElement('a');
+        card.href = `${BACKEND_URL}/post/${post.slug}`;
+        card.target = '_blank';
+        card.className = 'post-card';
+        card.innerHTML = `
+          <div class="post-header">
+            <div class="post-date">${badge} · ${dateStr}</div>
+            <div class="post-title">${post.title}</div>
+          </div>
+          <div class="post-body">
+            <div class="post-excerpt">${post.excerpt}</div>
+            <div class="post-link">읽기 →</div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function displayError(msg) {
+      const container = document.getElementById('posts-container');
+      container.innerHTML = `<div class="error" style="grid-column: 1/-1;">⚠️ ${msg}<br><small>포트 8253 서버를 실행하세요</small></div>`;
+    }
+
+    document.addEventListener('DOMContentLoaded', loadPosts);
+  </script>
+</body>
+</html>
