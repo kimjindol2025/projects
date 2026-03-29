@@ -23,6 +23,8 @@ const (
 	NodeBoolLit                 // true / false 리터럴
 	NodeStringLit               // "hello" 문자열 리터럴
 	NodeStructLit               // Point{x: 1, y: 2} 구조체 초기화
+	NodeArrayLit                // [1, 2, 3] 배열 리터럴
+	NodeIndexExpr               // arr[i] 인덱싱
 )
 
 // Node represents a single AST node
@@ -71,8 +73,10 @@ const (
 	TokenStruct
 	TokenTrue   // true 키워드
 	TokenFalse  // false 키워드
-	TokenString // "hello" 문자열 리터럴
-	TokenElse   // else 키워드
+	TokenString   // "hello" 문자열 리터럴
+	TokenElse     // else 키워드
+	TokenLBracket // [
+	TokenRBracket // ]
 )
 
 // Token represents a lexical token

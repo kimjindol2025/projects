@@ -359,6 +359,12 @@ func (g *Generator) genExpr(node *ast.Node) (Operand, error) {
 	case ast.NodeFieldAccess:
 		return g.genFieldAccess(node)
 
+	case ast.NodeArrayLit:
+		return g.genArrayLit(node)
+
+	case ast.NodeIndexExpr:
+		return g.genIndexExpr(node)
+
 	default:
 		return Operand{}, fmt.Errorf("unsupported expression kind: %d", node.Kind)
 	}
@@ -588,6 +594,58 @@ func (g *Generator) genFieldAccess(node *ast.Node) (Operand, error) {
 		Dest: result,
 		Src1: objOp,
 		Src2: Operand{IsImm: true, ImmVal: offset},
+	})
+
+	return result, nil
+}
+
+// genArrayLit generates IR for array literals: [1, 2, 3]
+func (g *Generator) genArrayLit(node *ast.Node) (Operand, error) {
+	// Generate IR for each element and emit as parameter
+	for _, elem := range node.Children {
+		op, err := g.genExpr(elem)
+		if err != nil {
+			return Operand{}, err
+		}
+		g.emit(Instruction{
+			Op:   OpParam,
+			Src1: op,
+		})
+	}
+
+	// Create array with element count
+	result := g.newTemp()
+	g.emit(Instruction{
+		Op:   OpArrayNew,
+		Dest: result,
+		Src1: Operand{IsImm: true, ImmVal: int64(len(node.Children))},
+	})
+
+	return result, nil
+}
+
+// genIndexExpr generates IR for array indexing: arr[i]
+func (g *Generator) genIndexExpr(node *ast.Node) (Operand, error) {
+	if len(node.Children) < 2 {
+		return Operand{}, fmt.Errorf("index expression requires array and index")
+	}
+
+	arrOp, err := g.genExpr(node.Children[0])
+	if err != nil {
+		return Operand{}, err
+	}
+
+	idxOp, err := g.genExpr(node.Children[1])
+	if err != nil {
+		return Operand{}, err
+	}
+
+	result := g.newTemp()
+	g.emit(Instruction{
+		Op:   OpArrayLoad,
+		Dest: result,
+		Src1: arrOp,
+		Src2: idxOp,
 	})
 
 	return result, nil

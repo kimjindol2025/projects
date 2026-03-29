@@ -250,3 +250,60 @@ func TestIfWithBoolLiteral(t *testing.T) {
 		t.Errorf("expected x=1, got %v", xVal)
 	}
 }
+
+// TestArrayLiteral tests array literal creation
+func TestArrayLiteral(t *testing.T) {
+	_, globals := runProgram(t, "let arr = [1, 2, 3]")
+
+	if arrVal, ok := globals["arr"]; !ok || arrVal.Kind != KindArray || len(arrVal.Elems) != 3 {
+		t.Errorf("expected arr=KindArray with 3 elements, got %v", arrVal)
+	}
+}
+
+// TestArrayIndex tests array indexing
+func TestArrayIndex(t *testing.T) {
+	_, globals := runProgram(t, "let arr = [10, 20, 30]  let x = arr[0]  let y = arr[2]")
+
+	if xVal, ok := globals["x"]; !ok || xVal.Kind != KindInt || xVal.IVal != 10 {
+		t.Errorf("expected x=10, got %v", xVal)
+	}
+	if yVal, ok := globals["y"]; !ok || yVal.Kind != KindInt || yVal.IVal != 30 {
+		t.Errorf("expected y=30, got %v", yVal)
+	}
+}
+
+// TestArrayIndexVar tests array indexing with variable
+func TestArrayIndexVar(t *testing.T) {
+	_, globals := runProgram(t, "let arr = [5, 15, 25]  let i = 1  let val = arr[i]")
+
+	if valVal, ok := globals["val"]; !ok || valVal.Kind != KindInt || valVal.IVal != 15 {
+		t.Errorf("expected val=15, got %v", valVal)
+	}
+}
+
+// TestArrayInLoop tests array indexing in for loop
+func TestArrayInLoop(t *testing.T) {
+	_, globals := runProgram(t, "let arr = [1, 2, 3]  let sum = 0  for i in 0..3 { let sum = sum + arr[i] }")
+
+	if sumVal, ok := globals["sum"]; !ok || sumVal.Kind != KindInt || sumVal.IVal != 6 {
+		t.Errorf("expected sum=6, got %v", sumVal)
+	}
+}
+
+// TestArrayLength tests len_arr builtin with array
+func TestArrayLength(t *testing.T) {
+	_, globals := runProgram(t, "let arr = [10, 20, 30, 40]  let length = len_arr(arr)")
+
+	if lenVal, ok := globals["length"]; !ok || lenVal.Kind != KindInt || lenVal.IVal != 4 {
+		t.Errorf("expected length=4, got %v", lenVal)
+	}
+}
+
+// TestEmptyArray tests empty array creation
+func TestEmptyArray(t *testing.T) {
+	_, globals := runProgram(t, "let arr = []")
+
+	if arrVal, ok := globals["arr"]; !ok || arrVal.Kind != KindArray || len(arrVal.Elems) != 0 {
+		t.Errorf("expected arr=empty KindArray, got %v", arrVal)
+	}
+}

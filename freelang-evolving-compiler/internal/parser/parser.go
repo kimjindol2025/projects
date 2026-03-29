@@ -419,6 +419,9 @@ func (p *Parser) parsePrimary() (*ast.Node, error) {
 		}
 		return expr, nil
 
+	case ast.TokenLBracket:
+		return p.parseArrayLit()
+
 	default:
 		return nil, fmt.Errorf("unexpected token: %v", p.curToken.Type)
 	}
@@ -438,6 +441,11 @@ func (p *Parser) parseInfix(left *ast.Node) (*ast.Node, error) {
 			Col:      p.curToken.Col,
 			Children: []*ast.Node{left},
 		}, nil
+	}
+
+	// Handle array indexing: arr[i]
+	if p.curToken.Type == ast.TokenLBracket {
+		return p.parseIndexExpr(left)
 	}
 
 	node := &ast.Node{
@@ -499,7 +507,7 @@ func precedence(tok ast.TokenType) int {
 		return 3
 	case ast.TokenDotDot:
 		return 4
-	case ast.TokenDot:
+	case ast.TokenDot, ast.TokenLBracket:
 		return 5
 	default:
 		return 0
@@ -641,4 +649,62 @@ func (p *Parser) parseStructLit(name string) (*ast.Node, error) {
 	p.nextToken() // consume '}'
 
 	return structLit, nil
+}
+
+// parseArrayLit parses array literals: [1, 2, 3]
+func (p *Parser) parseArrayLit() (*ast.Node, error) {
+	node := &ast.Node{
+		Kind:  ast.NodeArrayLit,
+		Line:  p.curToken.Line,
+		Col:   p.curToken.Col,
+		Children: []*ast.Node{},
+	}
+
+	p.nextToken() // skip '['
+
+	for p.curToken.Type != ast.TokenRBracket && p.curToken.Type != ast.TokenEOF {
+		elem, err := p.parseExpression(0)
+		if err != nil {
+			return nil, err
+		}
+		node.Children = append(node.Children, elem)
+
+		if p.curToken.Type == ast.TokenComma {
+			p.nextToken()
+		} else if p.curToken.Type != ast.TokenRBracket {
+			return nil, fmt.Errorf("expected ',' or ']' in array literal")
+		}
+	}
+
+	if p.curToken.Type != ast.TokenRBracket {
+		return nil, fmt.Errorf("expected ']' to close array literal")
+	}
+
+	p.nextToken() // skip ']'
+	return node, nil
+}
+
+// parseIndexExpr parses array indexing: arr[i]
+func (p *Parser) parseIndexExpr(obj *ast.Node) (*ast.Node, error) {
+	node := &ast.Node{
+		Kind:     ast.NodeIndexExpr,
+		Line:     obj.Line,
+		Col:      obj.Col,
+		Children: []*ast.Node{obj},
+	}
+
+	p.nextToken() // skip '['
+
+	idx, err := p.parseExpression(0)
+	if err != nil {
+		return nil, err
+	}
+	node.Children = append(node.Children, idx)
+
+	if p.curToken.Type != ast.TokenRBracket {
+		return nil, fmt.Errorf("expected ']' after array index")
+	}
+
+	p.nextToken() // skip ']'
+	return node, nil
 }

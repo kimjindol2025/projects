@@ -260,6 +260,43 @@ func (vm *VM) execInstrs(instrs []ir.Instruction, labelMap map[string]int, frame
 		case ir.OpSyscall:
 			// No-op (not implemented)
 
+		case ir.OpArrayNew:
+			count := int(instr.Src1.ImmVal)
+			args := vm.drainParamQueue()
+			elems := make([]Value, count)
+			for i := 0; i < count && i < len(args); i++ {
+				elems[i] = args[i]
+			}
+			result = ArrayVal(elems)
+			vm.storeResult(instr.Dest, result, frame)
+
+		case ir.OpArrayLoad:
+			arr := vm.loadOperand(instr.Src1, frame)
+			idx := vm.loadOperand(instr.Src2, frame)
+			if arr.Kind != KindArray {
+				return NilVal(), fmt.Errorf("index on non-array")
+			}
+			i := int(idx.IVal)
+			if i < 0 || i >= len(arr.Elems) {
+				return NilVal(), fmt.Errorf("index out of bounds: %d", i)
+			}
+			result = arr.Elems[i]
+			vm.storeResult(instr.Dest, result, frame)
+
+		case ir.OpArrayStore:
+			arr := vm.loadOperand(instr.Src1, frame)
+			idx := vm.loadOperand(instr.Src2, frame)
+			val := vm.loadOperand(instr.Dest, frame)
+			if arr.Kind != KindArray {
+				return NilVal(), fmt.Errorf("field store on non-array")
+			}
+			i := int(idx.IVal)
+			if i < 0 || i >= len(arr.Elems) {
+				return NilVal(), fmt.Errorf("index out of bounds: %d", i)
+			}
+			arr.Elems[i] = val
+			vm.storeResult(instr.Src1, arr, frame)
+
 		default:
 			return NilVal(), fmt.Errorf("unknown opcode: %v", instr.Op)
 		}

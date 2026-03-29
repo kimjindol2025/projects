@@ -192,6 +192,21 @@ func (cg *CodeGen) generateInstruction(instr ir.Instruction) {
 	case ir.OpSyscall:
 		cg.writeLine(fmt.Sprintf("  SVC %s", cg.formatOperand(instr.Dest)))
 
+	case ir.OpArrayNew:
+		cg.writeLine(fmt.Sprintf("  ARRAY_NEW %s, #%d", cg.formatOperand(instr.Dest), instr.Src1.ImmVal))
+
+	case ir.OpArrayLoad:
+		cg.writeLine(fmt.Sprintf("  LOAD_ELEM %s, %s[%s]",
+			cg.formatOperand(instr.Dest),
+			cg.formatOperand(instr.Src1),
+			cg.formatOperand(instr.Src2)))
+
+	case ir.OpArrayStore:
+		cg.writeLine(fmt.Sprintf("  STORE_ELEM %s[%s], %s",
+			cg.formatOperand(instr.Src1),
+			cg.formatOperand(instr.Src2),
+			cg.formatOperand(instr.Dest)))
+
 	case ir.OpNoop:
 		// Skip noop instructions
 	}

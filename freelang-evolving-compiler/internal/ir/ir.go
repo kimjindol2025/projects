@@ -31,6 +31,9 @@ const (
 	OpFieldLoad
 	OpFieldStore
 	OpSyscall
+	OpArrayNew   // 배열 생성: Dest = []; Src1 = count
+	OpArrayLoad  // 배열 읽기: Dest = arr[i]; Src1 = arr, Src2 = index
+	OpArrayStore // 배열 쓰기: arr[i] = val; Src1 = arr, Src2 = index, Dest = val
 )
 
 // Operand represents a value in an instruction (register, immediate, or label)

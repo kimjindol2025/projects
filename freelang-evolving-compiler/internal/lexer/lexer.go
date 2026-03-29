@@ -190,6 +190,14 @@ func (l *Lexer) NextToken() ast.Token {
 		tok.Type = ast.TokenSemicolon
 		tok.Value = ";"
 		l.readChar()
+	case '[':
+		tok.Type = ast.TokenLBracket
+		tok.Value = "["
+		l.readChar()
+	case ']':
+		tok.Type = ast.TokenRBracket
+		tok.Value = "]"
+		l.readChar()
 	case '"':
 		// String literal: "hello"
 		l.readChar() // consume opening "
